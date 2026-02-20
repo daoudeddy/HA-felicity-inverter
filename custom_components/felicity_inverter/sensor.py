@@ -63,15 +63,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:gauge",
         suggested_display_precision=1,
     ),
-    FelicitySensorDescription(
-        key="bus_voltage_p",
-        name="DC Bus Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-dc",
-        suggested_display_precision=1,
-    ),
 
     # --- AC input ---
     FelicitySensorDescription(
@@ -100,7 +91,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:sine-wave",
         suggested_display_precision=2,
     ),
-    
     FelicitySensorDescription(
         key="ac_in_power",
         name="AC In Power",
@@ -137,7 +127,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:sine-wave",
         suggested_display_precision=2,
     ),
-        
     FelicitySensorDescription(
         key="ac_out_power",
         name="AC Out Power",
@@ -146,7 +135,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:home-lightning-bolt",
     ),
-
 
     # --- PV input (PV[][]) ---
     FelicitySensorDescription(
@@ -175,7 +163,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:solar-power",
     ),
-
     FelicitySensorDescription(
         key="pv2_voltage",
         name="PV2 Voltage",
@@ -202,7 +189,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:solar-power",
     ),
-
     FelicitySensorDescription(
         key="pv3_voltage",
         name="PV3 Voltage",
@@ -229,7 +215,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:solar-power",
     ),
-
     FelicitySensorDescription(
         key="pv_total_power",
         name="PV Total Power",
@@ -239,9 +224,7 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:solar-power",
     ),
 
-
     # --- Energy counters (Energy[0..7] -> [0,total,day,month,year], values in Wh) ---
-    # NOTE: We expose 8 groups x 4 periods. Values are converted to kWh.
     FelicitySensorDescription(
         key="energy_pv_today",
         name="PV энергия за день",
@@ -538,7 +521,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         suggested_display_precision=2,
     ),
 
-
     # --- Temperatures (Temp[0][..]) ---
     FelicitySensorDescription(
         key="temp_1",
@@ -608,21 +590,11 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:clock-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-            FelicitySensorDescription(
+    FelicitySensorDescription(
         key="parallel_status",
         name="Parallel Status",
         icon="mdi:link-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="bus_voltage_n",
-        name="DC Bus Voltage N",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-dc",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
     ),
     FelicitySensorDescription(
         key="telemetry_raw",
@@ -630,6 +602,7 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:code-json",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+
     # --- Settings (dev set infor) ---
     FelicitySensorDescription(
         key="settings_summary",
@@ -856,7 +829,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=1,
     ),
-            
 )
 
 
@@ -891,7 +863,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
 
-        # Cache for glitch-filtering inverter-reported *_today energy counters
+        # Per-entity cache for *_today glitch-filtering
         self._energy_today_last_kwh: float | None = None
         self._energy_today_last_ts: datetime | None = None
         self._energy_today_last_date: str | None = None
@@ -932,14 +904,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             scale: float | None = None,
             digits: int | None = None,
         ):
-            """Safely read nested path from coordinator data.
-
-            Args:
-                path: tuple of keys/indexes
-                default: value when missing
-                scale: multiply numeric result by this factor
-                digits: round numeric result to this amount of digits
-            """
+            """Safely read nested path from coordinator data."""
             cur: Any = data
             try:
                 for p in path:
@@ -954,10 +919,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             return cur
 
         def trunc_decimals(value: float, digits: int) -> float:
-            """Truncate (not round) a float to a fixed number of decimals.
-
-            The vendor app appears to *truncate* kWh values (e.g. 46.649 -> 46.64).
-            """
+            """Truncate (not round) a float to a fixed number of decimals."""
             factor = 10 ** digits
             return math.trunc(value * factor) / factor
 
@@ -971,16 +933,11 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
 
         if key == "load_percent":
             raw = data.get("lPerc")
-            # Commonly appears scaled by 10 (e.g. 110 -> 11.0%)
             return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
 
         if key == "power_flow":
             raw = data.get("pFlow")
             return raw if isinstance(raw, (int, float)) else None
-
-        if key == "bus_voltage_p":
-            raw = data.get("busVp")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
 
         if key == "ac_in_voltage":
             raw = get_nested(("ACin", 0, 0))
@@ -995,12 +952,10 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             return round(raw / 100.0, 2) if isinstance(raw, (int, float)) else None
 
         if key == "ac_in_power":
-            # ACin[3][0] looks like active power in watts
             raw = get_nested(("ACin", 3, 0))
             return round(raw, 0) if isinstance(raw, (int, float)) else None
 
         if key == "ac_in_apparent_power":
-            # ACin[3][1] looks like apparent power in volt-amperes
             raw = get_nested(("ACin", 3, 1))
             return round(raw, 0) if isinstance(raw, (int, float)) else None
 
@@ -1017,7 +972,6 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             return round(raw / 100.0, 2) if isinstance(raw, (int, float)) else None
 
         if key == "ac_out_power":
-            # ACout[3][0] looks like active power in watts
             raw = get_nested(("ACout", 3, 0))
             return round(raw, 0) if isinstance(raw, (int, float)) else None
 
@@ -1030,20 +984,11 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             return round(raw, 0) if isinstance(raw, (int, float)) else None
 
         def _pv_is_aggregated() -> bool:
-            """Detect aggregated PV layout used by some firmwares.
-
-            Observed layouts in `real infor`:
-              * Per-MPPT: PV[0]=[V1,I1,P1], PV[1]=[V2,I2,P2], PV[2]=[V3,I3,P3], PV[3]=[Ptotal]
-              * Aggregated: PV[0]=[Vpv,0,0], PV[1]=[Ipv*10,0,0], PV[2]=[Ppv,0,0], PV[3]=[Ptotal]
-            """
+            """Detect aggregated PV layout used by some firmwares."""
             v0 = get_nested(("PV", 0, 0))
-
-            # Voltage is usually tens/hundreds of volts => raw > 500 (>= 50.0V).
             if not (isinstance(v0, (int, float)) and v0 > 500):
                 return False
 
-            # If PV[0][1] (current) or PV[0][2] (power) contains meaningful values,
-            # assume per-MPPT layout.
             i0 = get_nested(("PV", 0, 1))
             p0 = get_nested(("PV", 0, 2))
             if isinstance(i0, (int, float)) and i0 != 0:
@@ -1055,10 +1000,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             p2 = get_nested(("PV", 2, 0))
             pt = get_nested(("PV", 3, 0))
 
-            # Heuristic: PV[1][0] looks like current*10 (0..30A => raw 0..300)
             current_like = isinstance(v1, (int, float)) and 0 < v1 < 300
-
-            # Heuristic: PV[2][0] is close to PV[3][0] (both are power in watts)
             power_like = (
                 isinstance(pt, (int, float))
                 and isinstance(p2, (int, float))
@@ -1067,13 +1009,12 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
                 and abs(pt - p2) <= max(5.0, 0.05 * max(pt, 1.0))
                 and p2 < 20000
             )
-
             return current_like or power_like
 
-
+        # ---- PV measurements ----
         if key == "pv1_voltage":
-            raw = get_nested(("PV", 0, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
+            raw_v = get_nested(("PV", 0, 0))
+            return round(raw_v / 10.0, 1) if isinstance(raw_v, (int, float)) else None
 
         if key == "pv1_current":
             raw_i = get_nested(("PV", 0, 1))
@@ -1082,29 +1023,30 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             return round(raw_i / 10.0, 1) if isinstance(raw_i, (int, float)) else None
 
         if key == "pv1_power":
-            # Some firmwares expose PV as an "aggregated" matrix:
-            #   PV[0] = [Vpv, V2, V3]
-            #   PV[1] = [Ipv*10, I2*10, I3*10]
-            #   PV[2] = [Ppv, P2, P3]
-            #   PV[3] = [Ptotal]
-            # In this layout PV1 power is PV[2][0] (not PV[0][2]).
             if _pv_is_aggregated():
+                # V = PV[0][0]/10, I = PV[1][0]/10, P = PV[2][0] or PV[3][0]
+                raw_v = get_nested(("PV", 0, 0), default=0)
+                raw_i = get_nested(("PV", 1, 0), default=0)
+                if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
+                    return 0
+
                 p1 = get_nested(("PV", 2, 0))
                 total = get_nested(("PV", 3, 0))
                 if isinstance(p1, (int, float)):
-                    # Some firmwares keep PV[2][0]=0 while total has value.
                     if p1 == 0 and isinstance(total, (int, float)) and total != 0:
                         return round(total, 0)
                     return round(p1, 0)
                 return round(total, 0) if isinstance(total, (int, float)) else None
 
-            # Some firmwares report PV total power only, leaving PV1 power at 0.
-            # If PV2 is missing/zero, map PV1 Power to PV Total Power.
+            raw_v = get_nested(("PV", 0, 0), default=0)
+            raw_i = get_nested(("PV", 0, 1), default=0)
+            if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
+                return 0
+
             p1 = get_nested(("PV", 0, 2))
             if isinstance(p1, (int, float)) and p1 != 0:
                 return round(p1, 0)
 
-            # PV2 considered absent when all three values are 0 (or missing)
             pv2_v = get_nested(("PV", 1, 0), default=0)
             pv2_c = get_nested(("PV", 1, 1), default=0)
             pv2_p = get_nested(("PV", 1, 2), default=0)
@@ -1123,86 +1065,113 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
         if key == "pv2_voltage":
             if _pv_is_aggregated():
                 return 0.0
-            raw = get_nested(("PV", 1, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
+            raw_v = get_nested(("PV", 1, 0))
+            return round(raw_v / 10.0, 1) if isinstance(raw_v, (int, float)) else None
 
         if key == "pv2_current":
             if _pv_is_aggregated():
                 return 0.0
-            raw = get_nested(("PV", 1, 1))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
+            raw_i = get_nested(("PV", 1, 1))
+            return round(raw_i / 10.0, 1) if isinstance(raw_i, (int, float)) else None
 
         if key == "pv2_power":
             if _pv_is_aggregated():
                 return 0.0
-            raw = get_nested(("PV", 1, 2))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
+            raw_v = get_nested(("PV", 1, 0), default=0)
+            raw_i = get_nested(("PV", 1, 1), default=0)
+            if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
+                return 0
+            raw_p = get_nested(("PV", 1, 2))
+            return round(raw_p, 0) if isinstance(raw_p, (int, float)) else None
 
         if key == "pv3_voltage":
             if _pv_is_aggregated():
                 return 0.0
-            raw = get_nested(("PV", 2, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
+            raw_v = get_nested(("PV", 2, 0))
+            return round(raw_v / 10.0, 1) if isinstance(raw_v, (int, float)) else None
 
         if key == "pv3_current":
             if _pv_is_aggregated():
                 return 0.0
-            raw = get_nested(("PV", 2, 1))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
+            raw_i = get_nested(("PV", 2, 1))
+            return round(raw_i / 10.0, 1) if isinstance(raw_i, (int, float)) else None
 
         if key == "pv3_power":
             if _pv_is_aggregated():
                 return 0.0
-            raw = get_nested(("PV", 2, 2))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
+            raw_v = get_nested(("PV", 2, 0), default=0)
+            raw_i = get_nested(("PV", 2, 1), default=0)
+            if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
+                return 0
+            raw_p = get_nested(("PV", 2, 2))
+            return round(raw_p, 0) if isinstance(raw_p, (int, float)) else None
 
         if key == "pv_total_power":
-            raw = get_nested(("PV", 3, 0))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
+            raw_p = get_nested(("PV", 3, 0))
+            if not isinstance(raw_p, (int, float)):
+                return None
+
+            # If all PV channels show V=0 and I=0, force P=0. Otherwise show inverter value.
+            v1 = get_nested(("PV", 0, 0), default=0)
+            i1 = get_nested(("PV", 0, 1), default=0)
+            v2 = get_nested(("PV", 1, 0), default=0)
+            i2 = get_nested(("PV", 1, 1), default=0)
+            v3 = get_nested(("PV", 2, 0), default=0)
+            i3 = get_nested(("PV", 2, 1), default=0)
+
+            if _pv_is_aggregated():
+                v_all = get_nested(("PV", 0, 0), default=0)
+                i_all = get_nested(("PV", 1, 0), default=0)
+                if isinstance(v_all, (int, float)) and isinstance(i_all, (int, float)) and v_all == 0 and i_all == 0:
+                    return 0
+            else:
+                all_zero = (
+                    isinstance(v1, (int, float)) and isinstance(i1, (int, float))
+                    and isinstance(v2, (int, float)) and isinstance(i2, (int, float))
+                    and isinstance(v3, (int, float)) and isinstance(i3, (int, float))
+                    and v1 == 0 and i1 == 0 and v2 == 0 and i2 == 0 and v3 == 0 and i3 == 0
+                )
+                if all_zero:
+                    return 0
+
+            return round(raw_p, 0)
 
         # --- Energy counters (Energy[0..7] -> [0,total,day,month,year]) ---
         energy_map: dict[str, tuple[int, int]] = {
-            # PV
             "energy_pv_total": (0, 1),
             "energy_pv_today": (0, 2),
             "energy_pv_month": (0, 3),
             "energy_pv_year": (0, 4),
-            # Backup load (Reserved)
             "energy_backup_load_total": (1, 1),
             "energy_backup_load_today": (1, 2),
             "energy_backup_load_month": (1, 3),
             "energy_backup_load_year": (1, 4),
-            # Grid import (consumption)
             "energy_grid_import_total": (2, 1),
             "energy_grid_import_today": (2, 2),
             "energy_grid_import_month": (2, 3),
             "energy_grid_import_year": (2, 4),
-            # Grid export (feed-in)
             "energy_grid_export_total": (3, 1),
             "energy_grid_export_today": (3, 2),
             "energy_grid_export_month": (3, 3),
             "energy_grid_export_year": (3, 4),
-            # Battery charge
             "energy_battery_charge_total": (4, 1),
             "energy_battery_charge_today": (4, 2),
             "energy_battery_charge_month": (4, 3),
             "energy_battery_charge_year": (4, 4),
-            # Battery discharge
             "energy_battery_discharge_total": (5, 1),
             "energy_battery_discharge_today": (5, 2),
             "energy_battery_discharge_month": (5, 3),
             "energy_battery_discharge_year": (5, 4),
-            # Home load
             "energy_home_load_total": (6, 1),
             "energy_home_load_today": (6, 2),
             "energy_home_load_month": (6, 3),
             "energy_home_load_year": (6, 4),
-            # Total load (Backup + Home)
             "energy_total_load_total": (7, 1),
             "energy_total_load_today": (7, 2),
             "energy_total_load_month": (7, 3),
             "energy_total_load_year": (7, 4),
         }
+
         if key in energy_map:
             g, i = energy_map[key]
             raw = get_nested(("Energy", g, i))
@@ -1211,15 +1180,58 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
 
             kwh = trunc_decimals(raw / 1000.0, 2)
 
-            # The inverter sometimes outputs a short-lived glitch for *_today values
-            # (e.g., after a nightly reboot), where "today" momentarily includes
-            # yesterday's kWh. This causes large vertical spikes in HA History.
-            # We suppress implausible upward jumps based on the time delta between
-            # payload timestamps.
+            # --- Practical compromise: ONLY PV energy today ---
+            if key == "energy_pv_today":
+                date_str = data.get("date")
+
+                # prevent double-processing the same payload
+                if (
+                    date_str
+                    and date_str == self._energy_today_last_date
+                    and self._energy_today_last_kwh is not None
+                ):
+                    return self._energy_today_last_kwh
+
+                ts: datetime | None = None
+                if isinstance(date_str, str) and len(date_str) >= 14:
+                    try:
+                        ts = datetime.strptime(date_str[:14], "%Y%m%d%H%M%S")
+                    except Exception:
+                        ts = None
+
+                # If day changed -> accept (including reset to 0)
+                if (
+                    self._energy_today_last_ts is not None
+                    and ts is not None
+                    and ts.date() != self._energy_today_last_ts.date()
+                ):
+                    self._energy_today_last_kwh = kwh
+                    self._energy_today_last_ts = ts
+                    self._energy_today_last_date = date_str
+                    return kwh
+
+                # If "no generation" (PV total power ~0), forbid *any* upward jump.
+                pv_total_power_w = get_nested(("PV", 3, 0))
+                no_gen = isinstance(pv_total_power_w, (int, float)) and pv_total_power_w <= 5.0
+
+                if no_gen and self._energy_today_last_kwh is not None and kwh > self._energy_today_last_kwh:
+                    # hold previous; still advance timestamp/date to avoid repeated processing
+                    if ts is not None:
+                        self._energy_today_last_ts = ts
+                    self._energy_today_last_date = date_str
+                    return self._energy_today_last_kwh
+
+                # accept
+                if ts is not None:
+                    self._energy_today_last_ts = ts
+                self._energy_today_last_kwh = kwh
+                self._energy_today_last_date = date_str
+                return kwh
+
+            # --- Other *_today: keep old conservative jump filter ---
             if key.endswith("_today"):
                 date_str = data.get("date")
 
-                # Avoid mutating caches multiple times for the same payload.
                 if (
                     date_str
                     and date_str == self._energy_today_last_date
@@ -1243,18 +1255,14 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
                     if dt < 0:
                         dt = 0
 
-                    # Conservative upper bound: 20 kW equivalent + 0.5 kWh margin.
                     max_kw = 20.0
                     allowed_jump = (max_kw * (dt / 3600.0)) + 0.5
 
                     if (kwh - self._energy_today_last_kwh) > allowed_jump:
-                        # Keep previous value, but advance "seen" timestamp/date
-                        # so we don't repeatedly process the same payload.
                         self._energy_today_last_ts = ts
                         self._energy_today_last_date = date_str
                         return self._energy_today_last_kwh
 
-                # Accept new value
                 if ts is not None:
                     self._energy_today_last_ts = ts
                 self._energy_today_last_kwh = kwh
@@ -1263,7 +1271,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
 
             return kwh
 
-
+        # --- Temperatures ---
         if key == "temp_1":
             raw = get_nested(("Temp", 0, 0))
             return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
@@ -1280,6 +1288,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             raw = get_nested(("Temp", 0, 4))
             return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
 
+        # --- Diagnostics / codes ---
         if key == "work_mode":
             return data.get("workM")
 
@@ -1305,12 +1314,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
         if key == "parallel_status":
             return data.get("ParStu")
 
-        if key == "bus_voltage_n":
-            raw = get_nested(("busVn",), scale=0.1, digits=1)
-            return raw
-
         if key == "telemetry_raw":
-            # Keep state small; details in attributes.
             return data.get("date") or "ok"
 
         # --- Settings (dev set infor) ---
@@ -1348,7 +1352,6 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
             raw = sget("FGUF")
             return round(raw / 100.0, 2) if isinstance(raw, (int, float)) else None
 
-        
         if key == "set_stand":
             return sget("Stand")
 
@@ -1445,7 +1448,15 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
         data = self.coordinator.data or {}
         key = self.entity_description.key
 
-        if key in ("work_mode", "warning_code", "fault_code", "warning_flags_raw", "warning_flags2_raw", "parallel_status", "last_update_raw"):
+        if key in (
+            "work_mode",
+            "warning_code",
+            "fault_code",
+            "warning_flags_raw",
+            "warning_flags2_raw",
+            "parallel_status",
+            "last_update_raw",
+        ):
             return {
                 "wan2F": data.get("wan2F"),
                 "wan3F": data.get("wan3F"),
@@ -1455,6 +1466,64 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
                 "date": data.get("date"),
             }
 
+        if key == "energy_pv_today":
+            # Minimal diagnostics to confirm the "03:00 spike" conditions.
+            pv = data.get("PV") or []
+            en = data.get("Energy") or []
+            raw_today_wh = None
+            raw_total_wh = None
+            try:
+                raw_today_wh = en[0][2]
+            except Exception:
+                raw_today_wh = None
+            try:
+                raw_total_wh = en[0][1]
+            except Exception:
+                raw_total_wh = None
+
+            pv_total_power_w = None
+            pv_v_v = None
+            pv_i_a = None
+
+            try:
+                pv_total_power_w = pv[3][0]
+            except Exception:
+                pv_total_power_w = None
+
+            # voltage raw -> V
+            try:
+                pv_v_v = pv[0][0] / 10.0
+            except Exception:
+                pv_v_v = None
+
+            # current raw -> A (prefer aggregated current if present)
+            try:
+                # if aggregated, pv[1][0] is I*10; otherwise pv[0][1] is I1*10
+                if (
+                    isinstance(pv, list)
+                    and len(pv) >= 2
+                    and isinstance(pv[0], list)
+                    and isinstance(pv[1], list)
+                    and len(pv[0]) >= 2
+                    and len(pv[1]) >= 1
+                    and (pv[0][1] == 0 or pv[0][1] is None)
+                    and isinstance(pv[1][0], (int, float))
+                    and 0 <= pv[1][0] < 300
+                ):
+                    pv_i_a = pv[1][0] / 10.0
+                else:
+                    pv_i_a = pv[0][1] / 10.0
+            except Exception:
+                pv_i_a = None
+
+            return {
+                "date": data.get("date"),
+                "pv_total_power_w": pv_total_power_w,
+                "pv_v_v": pv_v_v,
+                "pv_i_a": pv_i_a,
+                "raw_today_wh": raw_today_wh,
+                "raw_total_wh": raw_total_wh,
+            }
 
         if key == "telemetry_raw":
             return {
@@ -1464,8 +1533,6 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
                 "fault": data.get("fault"),
                 "wan2F": data.get("wan2F"),
                 "wan3F": data.get("wan3F"),
-                "busVp": data.get("busVp"),
-                "busVn": data.get("busVn"),
                 "lPerc": data.get("lPerc"),
                 "pFlow": data.get("pFlow"),
                 "ACin": data.get("ACin"),
@@ -1477,6 +1544,7 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
                 "Batt": data.get("Batt"),
                 "Batsoc": data.get("Batsoc"),
             }
+
         if key == "settings_summary":
             settings = data.get("_settings") or {}
             packs = data.get("_settings_packs") or []
