@@ -108,6 +108,8 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["battery_voltage"], 55.97)
         self.assertEqual(data["battery_current"], 14.0)
         self.assertEqual(data["battery_power"], 783)
+        self.assertEqual(data["battery_charge_power"], 783)
+        self.assertEqual(data["battery_discharge_power"], 0)
         self.assertEqual(data["battery_soc"], 97.0)
         self.assertEqual(data["pv_voltage"], 182.3)
         self.assertEqual(data["pv_current"], 6.4)
@@ -119,6 +121,10 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["grid_frequency"], 49.41)
         self.assertEqual(data["output_frequency"], 49.41)
         self.assertEqual(data["load_power"], 180)
+        self.assertEqual(data["pv_to_load_power"], 180)
+        self.assertEqual(data["pv_to_battery_power"], 783)
+        self.assertEqual(data["pv_to_grid_power"], 213)
+        self.assertEqual(data["battery_to_load_power"], 0)
 
     @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
     def test_normalize_telemetry_supports_power_first_ac_layout(self) -> None:
@@ -164,6 +170,8 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["grid_frequency"], 50.0)
         self.assertEqual(data["load_power"], 1500)
         self.assertEqual(data["output_frequency"], 50.0)
+        self.assertEqual(data["battery_charge_power"], 0)
+        self.assertEqual(data["battery_discharge_power"], 200)
 
     @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
     def test_normalize_telemetry_clamps_flow_values(self) -> None:
@@ -180,8 +188,8 @@ class TelemetryNormalizationTests(unittest.TestCase):
                             "workM": 3,
                             "PV": [[1800, 0, 0], [100, 0, 0], [1000, 0, 0], [0]],
                             "ACin": [[2300], [0], [0], [0, 0], [0]],
-                            "ACout": [[2300], [20], [500], [5000, 460], [0]],
-                            "Batt": [[52000], [50], [-300, 0]],
+                            "ACout": [[2300], [20], [500], [0, 0], [0]],
+                            "Batt": [[52000], [50], [300, 0]],
                             "Batsoc": [[7000, 0, 0]],
                         }
                     ],
@@ -203,3 +211,5 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["battery_to_load_power"], 0)
         self.assertEqual(data["grid_to_load_power"], 0)
         self.assertEqual(data["self_consumption_percent"], 80.0)
+        self.assertEqual(data["battery_charge_power"], 300)
+        self.assertEqual(data["battery_discharge_power"], 0)

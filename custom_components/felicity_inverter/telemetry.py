@@ -75,15 +75,15 @@ def normalize_telemetry(
     battery_discharge_current: float | int | None = None
     if battery_power is not None:
         if battery_power > 0:
-            battery_discharge_power = battery_power
-            battery_charge_power = 0
-            battery_discharge_current = battery_current if battery_current is not None else 0
-            battery_charge_current = 0
-        elif battery_power < 0:
             battery_discharge_power = 0
-            battery_charge_power = _round_number(abs(float(battery_power)), 0)
+            battery_charge_power = battery_power
             battery_discharge_current = 0
             battery_charge_current = abs(float(battery_current)) if battery_current is not None else 0
+        elif battery_power < 0:
+            battery_discharge_power = _round_number(abs(float(battery_power)), 0)
+            battery_charge_power = 0
+            battery_discharge_current = abs(float(battery_current)) if battery_current is not None else 0
+            battery_charge_current = 0
         else:
             battery_charge_power = 0
             battery_discharge_power = 0
