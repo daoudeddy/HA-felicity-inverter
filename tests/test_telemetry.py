@@ -139,6 +139,7 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["battery_temperature"], 15.0)
         self.assertEqual(data["grid_frequency"], 49.41)
         self.assertEqual(data["output_frequency"], 49.41)
+        self.assertEqual(data["load_percent"], 3.0)
         self.assertEqual(data["load_power"], 180)
         self.assertEqual(data["load_apparent_power"], 207)
         self.assertEqual(data["pv_to_load_power"], 180)

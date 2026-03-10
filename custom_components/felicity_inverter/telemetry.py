@@ -194,7 +194,7 @@ def normalize_telemetry(
         "bms_inverter_serial": _coerce_string(bms.get("InvSN")),
         "bms_modbus_address": _integer(bms.get("ModAddr")),
         "bms_last_update": _coerce_string(bms.get("date")),
-        "load_percent": _scaled_number(inverter.get("lPerc"), 1.0, 1),
+        "load_percent": _scaled_number(inverter.get("lPerc"), 0.1, 1),
         "bus_voltage": _scaled_number(inverter.get("busVp"), 0.1, 1),
         "bus_negative_voltage": _scaled_number(inverter.get("busVn"), 0.1, 1),
         "battery_soc": battery_soc,
