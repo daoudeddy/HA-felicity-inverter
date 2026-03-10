@@ -31,6 +31,48 @@ class FelicitySensorDescription(SensorEntityDescription):
     """Extended sensor description for Felicity telemetry."""
 
 
+def _diagnostic_energy_description(
+    key: str,
+    name: str,
+    *,
+    total_increasing: bool = False,
+) -> FelicitySensorDescription:
+    """Build a diagnostic energy sensor description."""
+    return FelicitySensorDescription(
+        key=key,
+        name=name,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING if total_increasing else None,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:counter",
+    )
+
+
+ENERGY_COUNTER_SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = tuple(
+    _diagnostic_energy_description(
+        key=f"{prefix}_{period_key}",
+        name=f"{name} {period_label}",
+        total_increasing=period_key == "total",
+    )
+    for prefix, name in (
+        ("pv_yield_energy", "PV Yield Energy"),
+        ("load_consumption_energy", "Load Consumption Energy"),
+        ("grid_export_energy", "Grid Export Energy"),
+        ("grid_import_energy", "Grid Import Energy"),
+        ("battery_charge_energy", "Battery Charge Energy"),
+        ("battery_discharge_energy", "Battery Discharge Energy"),
+    )
+    for period_key, period_label in (
+        ("daily", "Daily"),
+        ("monthly", "Monthly"),
+        ("yearly", "Yearly"),
+        ("total", "Total"),
+    )
+)
+
+
 SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
     FelicitySensorDescription(
         key="battery_soc",
@@ -40,6 +82,22 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         icon="mdi:battery",
+    ),
+    FelicitySensorDescription(
+        key="battery_state_of_health",
+        name="Battery State of Health",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-heart-variant",
+    ),
+    FelicitySensorDescription(
+        key="battery_capacity",
+        name="Battery Capacity",
+        native_unit_of_measurement="Ah",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-unknown",
     ),
     FelicitySensorDescription(
         key="battery_voltage",
@@ -111,6 +169,11 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:battery-heart-variant",
     ),
     FelicitySensorDescription(
+        key="battery_charge_status",
+        name="Battery Charge Status",
+        icon="mdi:battery-sync",
+    ),
+    FelicitySensorDescription(
         key="pv_voltage",
         name="PV Voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -135,6 +198,49 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:solar-power",
+    ),
+    FelicitySensorDescription(
+        key="pv_total_power",
+        name="PV Total Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:solar-power",
+    ),
+    *tuple(
+        FelicitySensorDescription(
+            key=f"pv{index}_voltage",
+            name=f"PV{index} Voltage",
+            native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+            device_class=SensorDeviceClass.VOLTAGE,
+            state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=1,
+            icon="mdi:solar-panel",
+        )
+        for index in range(1, 4)
+    ),
+    *tuple(
+        FelicitySensorDescription(
+            key=f"pv{index}_current",
+            name=f"PV{index} Current",
+            native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+            device_class=SensorDeviceClass.CURRENT,
+            state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=1,
+            icon="mdi:current-dc",
+        )
+        for index in range(1, 4)
+    ),
+    *tuple(
+        FelicitySensorDescription(
+            key=f"pv{index}_power",
+            name=f"PV{index} Power",
+            native_unit_of_measurement=UnitOfPower.WATT,
+            device_class=SensorDeviceClass.POWER,
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:solar-power",
+        )
+        for index in range(1, 4)
     ),
     FelicitySensorDescription(
         key="grid_voltage",
@@ -163,6 +269,14 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:sine-wave",
     ),
     FelicitySensorDescription(
+        key="grid_power",
+        name="Grid Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower",
+    ),
+    FelicitySensorDescription(
         key="grid_import_power",
         name="Grid Import Power",
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -177,6 +291,21 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:transmission-tower-export",
+    ),
+    FelicitySensorDescription(
+        key="grid_apparent_power",
+        name="Grid Apparent Power",
+        native_unit_of_measurement="VA",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash-triangle",
+    ),
+    FelicitySensorDescription(
+        key="grid_total_power",
+        name="Grid Total Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower",
     ),
     FelicitySensorDescription(
         key="load_voltage",
@@ -213,6 +342,21 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:home-lightning-bolt-outline",
     ),
     FelicitySensorDescription(
+        key="load_apparent_power",
+        name="Load Apparent Power",
+        native_unit_of_measurement="VA",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash-triangle",
+    ),
+    FelicitySensorDescription(
+        key="load_total_power",
+        name="Load Total Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:home-lightning-bolt-outline",
+    ),
+    FelicitySensorDescription(
         key="generator_voltage",
         name="Generator Voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -231,8 +375,31 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:engine",
     ),
     FelicitySensorDescription(
+        key="generator_frequency",
+        name="Generator Frequency",
+        native_unit_of_measurement="Hz",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:sine-wave",
+    ),
+    FelicitySensorDescription(
         key="generator_power",
         name="Generator Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:engine",
+    ),
+    FelicitySensorDescription(
+        key="generator_apparent_power",
+        name="Generator Apparent Power",
+        native_unit_of_measurement="VA",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash-triangle",
+    ),
+    FelicitySensorDescription(
+        key="generator_total_power",
+        name="Generator Total Power",
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -257,8 +424,31 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:lightning-bolt-circle",
     ),
     FelicitySensorDescription(
+        key="smart_load_frequency",
+        name="Smart Load Frequency",
+        native_unit_of_measurement="Hz",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:sine-wave",
+    ),
+    FelicitySensorDescription(
         key="smart_load_power",
         name="Smart Load Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:lightning-bolt-circle",
+    ),
+    FelicitySensorDescription(
+        key="smart_load_apparent_power",
+        name="Smart Load Apparent Power",
+        native_unit_of_measurement="VA",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash-triangle",
+    ),
+    FelicitySensorDescription(
+        key="smart_load_total_power",
+        name="Smart Load Total Power",
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -274,12 +464,52 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:thermometer",
     ),
     FelicitySensorDescription(
+        key="transformer_temperature",
+        name="Transformer Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:thermometer",
+    ),
+    FelicitySensorDescription(
+        key="heatsink_temperature",
+        name="Heatsink Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:thermometer",
+    ),
+    FelicitySensorDescription(
+        key="ambient_temperature",
+        name="Ambient Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:thermometer",
+    ),
+    FelicitySensorDescription(
         key="bus_voltage",
         name="Bus Voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=2,
+        suggested_display_precision=1,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="bus_negative_voltage",
+        name="Bus Negative Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:current-dc",
     ),
     FelicitySensorDescription(
@@ -346,19 +576,35 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         suggested_display_precision=1,
         icon="mdi:battery-sync",
     ),
-    FelicitySensorDescription(
-        key="inverter_throughput_energy",
-        name="Inverter Throughput Energy",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=3,
-        icon="mdi:counter",
-    ),
+    *ENERGY_COUNTER_SENSOR_DESCRIPTIONS,
     FelicitySensorDescription(
         key="inverter_mode",
         name="Inverter Mode",
         icon="mdi:home-switch",
+    ),
+    FelicitySensorDescription(
+        key="communication_protocol_version",
+        name="Communication Protocol Version",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:information-outline",
+    ),
+    FelicitySensorDescription(
+        key="device_type",
+        name="Device Type",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:identifier",
+    ),
+    FelicitySensorDescription(
+        key="device_subtype",
+        name="Device Subtype",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:identifier",
+    ),
+    FelicitySensorDescription(
+        key="last_update",
+        name="Payload Timestamp",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:clock-outline",
     ),
     FelicitySensorDescription(
         key="inverter_warning_code",
@@ -371,6 +617,18 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         name="Inverter Fault Code",
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:alert-octagon",
+    ),
+    FelicitySensorDescription(
+        key="power_flow_status_raw",
+        name="Power Flow Status Raw",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:vector-polyline",
+    ),
+    FelicitySensorDescription(
+        key="power_flow_secondary_status_raw",
+        name="Power Flow Secondary Status Raw",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:vector-polyline-plus",
     ),
     FelicitySensorDescription(
         key="device_serial",
@@ -391,6 +649,12 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:chip",
     ),
     FelicitySensorDescription(
+        key="bms_firmware_version",
+        name="BMS Firmware Version",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:chip",
+    ),
+    FelicitySensorDescription(
         key="device_software_version",
         name="Device Software Version",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -403,6 +667,265 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:chip",
     ),
     FelicitySensorDescription(
+        key="bms_device_serial",
+        name="BMS Serial",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:identifier",
+    ),
+    FelicitySensorDescription(
+        key="bms_inverter_serial",
+        name="BMS Inverter Serial",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:identifier",
+    ),
+    FelicitySensorDescription(
+        key="bms_modbus_address",
+        name="BMS Modbus Address",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:counter",
+    ),
+    FelicitySensorDescription(
+        key="bms_last_update",
+        name="BMS Payload Timestamp",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:clock-outline",
+    ),
+    FelicitySensorDescription(
+        key="bms_count",
+        name="BMS Count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-multiple",
+    ),
+    FelicitySensorDescription(
+        key="wifi_status",
+        name="WiFi Status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:wifi-check",
+    ),
+    FelicitySensorDescription(
+        key="bms_communication_status",
+        name="BMS Communication Status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:lan-connect",
+    ),
+    FelicitySensorDescription(
+        key="bms_registration_status",
+        name="BMS Registration Status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:shield-check",
+    ),
+    FelicitySensorDescription(
+        key="bms_global_status",
+        name="BMS Global Status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:shield-sync",
+    ),
+    FelicitySensorDescription(
+        key="charge_source_priority",
+        name="Charge Source Priority",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:source-branch",
+    ),
+    FelicitySensorDescription(
+        key="max_ac_charge_current_limit",
+        name="Max AC Charge Current Limit",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:current-ac",
+    ),
+    FelicitySensorDescription(
+        key="smart_port_status",
+        name="Smart Port Status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:power-plug",
+    ),
+    FelicitySensorDescription(
+        key="system_power_status",
+        name="System Power Status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:power-settings",
+    ),
+    FelicitySensorDescription(
+        key="bms_fault_code",
+        name="BMS Fault Code",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:alert-octagon",
+    ),
+    FelicitySensorDescription(
+        key="bms_warning_code",
+        name="BMS Warning Code",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:alert",
+    ),
+    FelicitySensorDescription(
+        key="bms_state",
+        name="BMS State",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-lock",
+    ),
+    FelicitySensorDescription(
+        key="bms_pack_voltage",
+        name="BMS Pack Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-high",
+    ),
+    FelicitySensorDescription(
+        key="bms_pack_current",
+        name="BMS Pack Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="bms_pack_soc",
+        name="BMS Pack SOC",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-medium",
+    ),
+    FelicitySensorDescription(
+        key="bms_pack_state_of_health",
+        name="BMS Pack State of Health",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-heart-variant",
+    ),
+    FelicitySensorDescription(
+        key="bms_total_capacity",
+        name="BMS Total Capacity",
+        native_unit_of_measurement="Ah",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-unknown",
+    ),
+    FelicitySensorDescription(
+        key="bms_max_cell_voltage",
+        name="BMS Max Cell Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-plus-variant",
+    ),
+    FelicitySensorDescription(
+        key="bms_min_cell_voltage",
+        name="BMS Min Cell Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-minus-variant",
+    ),
+    FelicitySensorDescription(
+        key="bms_max_cell_temperature",
+        name="BMS Max Cell Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:thermometer-high",
+    ),
+    FelicitySensorDescription(
+        key="bms_min_cell_temperature",
+        name="BMS Min Cell Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:thermometer-low",
+    ),
+    FelicitySensorDescription(
+        key="bms_parallel_count",
+        name="BMS Parallel Count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-multiple",
+    ),
+    FelicitySensorDescription(
+        key="bms_hardware_config",
+        name="BMS Hardware Config",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:chip",
+    ),
+    FelicitySensorDescription(
+        key="bms_charge_voltage_limit",
+        name="BMS Charge Voltage Limit",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-charging-high",
+    ),
+    FelicitySensorDescription(
+        key="bms_discharge_voltage_limit",
+        name="BMS Discharge Voltage Limit",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-arrow-down",
+    ),
+    FelicitySensorDescription(
+        key="bms_charge_current_limit",
+        name="BMS Charge Current Limit",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="bms_discharge_current_limit",
+        name="BMS Discharge Current Limit",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="bms_temperature_1",
+        name="BMS Temperature 1",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:thermometer",
+    ),
+    FelicitySensorDescription(
+        key="bms_temperature_2",
+        name="BMS Temperature 2",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:thermometer",
+    ),
+    FelicitySensorDescription(
         key="raw_json_payload",
         name="Raw JSON Payload",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -410,39 +933,6 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:code-json",
     ),
 )
-
-
-CELL_SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = tuple(
-    [
-        FelicitySensorDescription(
-            key=f"battery_cell_{index}_voltage",
-            name=f"Battery Cell {index} Voltage",
-            native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-            device_class=SensorDeviceClass.VOLTAGE,
-            state_class=SensorStateClass.MEASUREMENT,
-            suggested_display_precision=3,
-            entity_category=EntityCategory.DIAGNOSTIC,
-            icon="mdi:battery-outline",
-        )
-        for index in range(1, 17)
-    ]
-    + [
-        FelicitySensorDescription(
-            key=f"battery_cell_{index}_temperature",
-            name=f"Battery Cell {index} Temperature",
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            state_class=SensorStateClass.MEASUREMENT,
-            suggested_display_precision=1,
-            entity_category=EntityCategory.DIAGNOSTIC,
-            icon="mdi:thermometer",
-        )
-        for index in range(1, 9)
-    ]
-)
-
-
-ALL_SENSOR_DESCRIPTIONS = SENSOR_DESCRIPTIONS + CELL_SENSOR_DESCRIPTIONS
 
 
 async def async_setup_entry(
@@ -455,7 +945,7 @@ async def async_setup_entry(
     coordinator = runtime.coordinator
 
     async_add_entities(
-        [FelicitySensor(coordinator, entry, description) for description in ALL_SENSOR_DESCRIPTIONS]
+        [FelicitySensor(coordinator, entry, description) for description in SENSOR_DESCRIPTIONS]
     )
 
 

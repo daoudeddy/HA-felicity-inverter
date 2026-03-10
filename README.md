@@ -16,10 +16,12 @@ The inverter may return multiple JSON objects concatenated together with no sepa
 - Default polling interval: **5 seconds**
 - TCP polling with automatic retry on the next cycle if a request fails
 - Clean normalized telemetry for Home Assistant sensors
+- CSV-aligned runtime mapping for inverter and BMS payloads
 - Power-flow sensors for dashboards and automations
 - Energy Dashboard compatible power sensors
+- PV string sensors and expanded AC-side metrics
+- BMS summary and limit diagnostics
 - Diagnostic device metadata sensors
-- BMS cell voltage and cell temperature monitoring
 - Optional raw JSON diagnostic sensor disabled by default
 
 ## Installation
@@ -57,16 +59,21 @@ The integration exposes normalized sensors in these groups:
   - charge / discharge current
   - battery temperature
 - **PV**
-  - voltage, current, power
+  - total voltage, current, power
+  - PV1 / PV2 / PV3 voltage, current, power when exposed by the inverter
 - **Grid**
   - voltage, current, frequency
+  - active power, apparent power, total power
   - import power, export power
 - **Load**
-  - voltage, current, frequency, power
+  - voltage, current, frequency
+  - active power, apparent power, total power
 - **Generator**
-  - voltage, current, power
+  - voltage, current, frequency
+  - active power, apparent power, total power
 - **Smart Load**
-  - voltage, current, power
+  - voltage, current, frequency
+  - active power, apparent power, total power
 - **Energy Flow**
   - PV → Load
   - PV → Battery
@@ -78,15 +85,30 @@ The integration exposes normalized sensors in these groups:
 - **System**
   - inverter mode
   - bus voltage
+  - bus negative voltage
   - load percent
-  - throughput energy
 - **Temperature**
   - inverter temperature
+  - transformer temperature
+  - heatsink temperature
+  - ambient temperature
   - battery temperature
+- **Diagnostic Energy Counters**
+  - daily / monthly / yearly / total PV yield
+  - daily / monthly / yearly / total load consumption
+  - daily / monthly / yearly / total grid import / export
+  - daily / monthly / yearly / total battery charge / discharge
 - **Warnings / Faults**
   - warning code
   - fault code
   - matching binary sensors
+- **BMS Diagnostics**
+  - BMS firmware, serial, inverter serial, and Modbus address
+  - pack voltage, current, SOC, SOH, capacity
+  - charge / discharge voltage limits
+  - charge / discharge current limits
+  - max / min cell voltage and temperature summary values
+  - communication, registration, and global status values
 - **Diagnostics**
   - device serial
   - WiFi serial
@@ -94,9 +116,6 @@ The integration exposes normalized sensors in these groups:
   - device software version
   - device hardware version
   - raw JSON payload sensor (disabled by default)
-- **BMS Cells**
-  - up to 16 cell voltage sensors
-  - up to 8 cell temperature sensors
 
 ## Energy Dashboard
 
@@ -111,17 +130,9 @@ This integration exposes real-time power sensors for:
 
 Use Home Assistant statistics/helpers to derive energy from those power sensors. The integration does **not** manually integrate energy in software.
 
-The only native energy sensor kept by the integration is:
+The inverter `Energy[][]` counters are exposed as diagnostic sensors for reference, including PV yield, load consumption, grid import/export, and battery charge/discharge totals.
 
-- `inverter_throughput_energy`
-
-This sensor uses:
-
-- `device_class = energy`
-- `state_class = total_increasing`
-- `unit = kWh`
-
-and does not use `last_reset`.
+`pFlow` is treated as a raw UI power-flow status bitmask, not as an energy counter.
 
 ## Debug logging
 

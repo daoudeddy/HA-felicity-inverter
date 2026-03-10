@@ -13,6 +13,39 @@ MODE_MAP: dict[int, str] = {
     4: "bypass",
 }
 
+BATTERY_CHARGE_STATUS_MAP: dict[int, str] = {
+    0: "idle_or_discharge",
+    1: "charge",
+}
+
+WIFI_STATUS_MAP: dict[int, str] = {
+    2: "cloud_connected",
+}
+
+BMS_COMMUNICATION_STATUS_MAP: dict[int, str] = {
+    1: "active",
+}
+
+BMS_REGISTRATION_STATUS_MAP: dict[int, str] = {
+    1: "registered",
+}
+
+BMS_GLOBAL_STATUS_MAP: dict[int, str] = {
+    3: "synchronized",
+}
+
+CHARGE_SOURCE_PRIORITY_MAP: dict[int, str] = {
+    3: "solar_first",
+}
+
+SMART_PORT_STATUS_MAP: dict[int, str] = {
+    0: "off_or_standby",
+}
+
+SYSTEM_POWER_STATUS_MAP: dict[int, str] = {
+    0: "normal",
+}
+
 
 def normalize_telemetry(
     raw_data: RawPollData,
@@ -54,6 +87,7 @@ def normalize_telemetry(
     load_metrics = _extract_ac_metrics(inverter.get("ACout"))
     generator_metrics = _extract_ac_metrics(inverter.get("GEN"))
     smart_load_metrics = _extract_ac_metrics(inverter.get("SmartL"))
+    energy_metrics = _extract_energy_metrics(inverter.get("Energy"))
 
     battery_voltage_raw = _first_number(
         _nested(inverter, "Batt", 0, 0),
@@ -90,25 +124,33 @@ def normalize_telemetry(
             battery_charge_current = 0
             battery_discharge_current = 0
 
-    battery_soc_raw = _first_number(
-        _nested(inverter, "Batsoc", 0, 0),
-        _nested(bms, "BatsocList", 0, 0),
-    )
-    battery_soc = _scaled_number(battery_soc_raw, 0.01, 1)
-
-    inverter_temperature = _scaled_number(_nested(inverter, "Temp", 0, 0), 0.1, 1)
-    battery_temperature = _normalize_temperature(
+    battery_soc = _scaled_number(
         _first_number(
-            inverter.get("BatTem"),
-            _nested(bms, "Templist", 0, 0),
-        )
+            _nested(inverter, "Batsoc", 0, 0),
+            _nested(bms, "BatsocList", 0, 0),
+        ),
+        0.01,
+        1,
     )
+
+    inverter_soh_raw = _number(_nested(inverter, "Batsoc", 0, 1))
+    if inverter_soh_raw is not None and inverter_soh_raw > 0:
+        battery_state_of_health = _round_number(inverter_soh_raw, 1)
+    else:
+        battery_state_of_health = _scaled_number(_nested(bms, "BatsocList", 0, 1), 0.1, 1)
+
+    battery_capacity = _scaled_number(_nested(bms, "BatsocList", 0, 2), 0.001, 3)
+
+    transformer_temperature = _scaled_number(_nested(inverter, "Temp", 0, 0), 0.1, 1)
+    heatsink_temperature = _scaled_number(_nested(inverter, "Temp", 0, 1), 0.1, 1)
+    ambient_temperature = _scaled_number(_nested(inverter, "Temp", 0, 2), 0.1, 1)
+    battery_temperature = _normalize_temperature(inverter.get("BatTem"))
 
     grid_power = grid_metrics["power"]
     grid_import_power = None if grid_power is None else _round_number(max(float(grid_power), 0.0), 0)
     grid_export_power = None if grid_power is None else _round_number(max(-float(grid_power), 0.0), 0)
 
-    pv_power = _positive_value(pv_metrics["power"])
+    pv_power = _positive_value(pv_metrics["total_power"])
     load_power = _positive_value(load_metrics["power"])
     battery_charge = _positive_value(battery_charge_power)
     battery_discharge = _positive_value(battery_discharge_power)
@@ -138,6 +180,7 @@ def normalize_telemetry(
         )
 
     normalized: dict[str, Any] = {
+        "communication_protocol_version": _integer(inverter.get("CommVer") or inverter_basic.get("CommVer")),
         "device_serial": _coerce_string(inverter.get("DevSN")) or inverter_serial,
         "wifi_serial": _coerce_string(inverter.get("wifiSN") or inverter_basic.get("wifiSN")),
         "firmware_version": _coerce_string(inverter.get("version") or inverter_basic.get("version")),
@@ -146,9 +189,17 @@ def normalize_telemetry(
         "device_type": inverter.get("Type") or inverter_basic.get("Type"),
         "device_subtype": inverter.get("SubType") or inverter_basic.get("SubType"),
         "last_update": _coerce_string(inverter.get("date")),
-        "load_percent": _scaled_number(inverter.get("lPerc"), 0.1, 1),
-        "bus_voltage": _scaled_number(inverter.get("busVp"), 0.01, 2),
+        "bms_firmware_version": _coerce_string(bms.get("version")),
+        "bms_device_serial": _coerce_string(bms.get("DevSN")),
+        "bms_inverter_serial": _coerce_string(bms.get("InvSN")),
+        "bms_modbus_address": _integer(bms.get("ModAddr")),
+        "bms_last_update": _coerce_string(bms.get("date")),
+        "load_percent": _scaled_number(inverter.get("lPerc"), 1.0, 1),
+        "bus_voltage": _scaled_number(inverter.get("busVp"), 0.1, 1),
+        "bus_negative_voltage": _scaled_number(inverter.get("busVn"), 0.1, 1),
         "battery_soc": battery_soc,
+        "battery_state_of_health": battery_state_of_health,
+        "battery_capacity": battery_capacity,
         "battery_voltage": battery_voltage,
         "battery_current": battery_current,
         "battery_power": battery_power,
@@ -157,29 +208,55 @@ def normalize_telemetry(
         "battery_charge_current": _round_number(battery_charge_current, 1),
         "battery_discharge_current": _round_number(battery_discharge_current, 1),
         "battery_temperature": battery_temperature,
+        "battery_charge_status": _map_enum(inverter.get("bCStat"), BATTERY_CHARGE_STATUS_MAP),
         "pv_voltage": pv_metrics["voltage"],
         "pv_current": pv_metrics["current"],
-        "pv_power": pv_metrics["power"],
+        "pv_power": pv_metrics["total_power"],
+        "pv_total_power": pv_metrics["total_power"],
+        "pv1_voltage": pv_metrics["pv1_voltage"],
+        "pv1_current": pv_metrics["pv1_current"],
+        "pv1_power": pv_metrics["pv1_power"],
+        "pv2_voltage": pv_metrics["pv2_voltage"],
+        "pv2_current": pv_metrics["pv2_current"],
+        "pv2_power": pv_metrics["pv2_power"],
+        "pv3_voltage": pv_metrics["pv3_voltage"],
+        "pv3_current": pv_metrics["pv3_current"],
+        "pv3_power": pv_metrics["pv3_power"],
         "grid_voltage": grid_metrics["voltage"],
         "grid_current": grid_metrics["current"],
         "grid_frequency": grid_metrics["frequency"],
+        "grid_power": grid_power,
         "grid_import_power": grid_import_power,
         "grid_export_power": grid_export_power,
+        "grid_apparent_power": grid_metrics["apparent_power"],
+        "grid_total_power": grid_metrics["total_power"],
         "load_voltage": load_metrics["voltage"],
         "load_current": load_metrics["current"],
         "output_frequency": load_metrics["frequency"],
         "load_power": load_metrics["power"],
+        "load_apparent_power": load_metrics["apparent_power"],
+        "load_total_power": load_metrics["total_power"],
         "generator_voltage": generator_metrics["voltage"],
         "generator_current": generator_metrics["current"],
+        "generator_frequency": generator_metrics["frequency"],
         "generator_power": generator_metrics["power"],
+        "generator_apparent_power": generator_metrics["apparent_power"],
+        "generator_total_power": generator_metrics["total_power"],
         "smart_load_voltage": smart_load_metrics["voltage"],
         "smart_load_current": smart_load_metrics["current"],
+        "smart_load_frequency": smart_load_metrics["frequency"],
         "smart_load_power": smart_load_metrics["power"],
-        "inverter_temperature": inverter_temperature,
+        "smart_load_apparent_power": smart_load_metrics["apparent_power"],
+        "smart_load_total_power": smart_load_metrics["total_power"],
+        "transformer_temperature": transformer_temperature,
+        "heatsink_temperature": heatsink_temperature,
+        "ambient_temperature": ambient_temperature,
+        "inverter_temperature": transformer_temperature,
         "inverter_mode": _map_mode(inverter.get("workM")),
         "inverter_warning_code": inverter.get("warn"),
         "inverter_fault_code": inverter.get("fault"),
-        "inverter_throughput_energy": _scaled_number(inverter.get("pFlow"), 0.001, 3),
+        "power_flow_status_raw": _integer(inverter.get("pFlow")),
+        "power_flow_secondary_status_raw": _integer(inverter.get("pFlowE1")),
         "pv_to_load_power": _round_number(pv_to_load, 0),
         "pv_to_battery_power": _round_number(pv_to_battery, 0),
         "pv_to_grid_power": _round_number(pv_to_grid, 0),
@@ -187,6 +264,36 @@ def normalize_telemetry(
         "grid_to_load_power": _round_number(grid_to_load, 0),
         "self_consumption_percent": self_consumption_percent,
         "battery_roundtrip_efficiency": battery_roundtrip_efficiency,
+        **energy_metrics,
+        "bms_count": _integer(inverter.get("bmsNum")),
+        "wifi_status": _map_enum(inverter.get("setWifi"), WIFI_STATUS_MAP),
+        "bms_communication_status": _map_enum(inverter.get("BMSFlE"), BMS_COMMUNICATION_STATUS_MAP),
+        "bms_registration_status": _map_enum(inverter.get("BMSFlg"), BMS_REGISTRATION_STATUS_MAP),
+        "bms_global_status": _map_enum(inverter.get("BFlgAll"), BMS_GLOBAL_STATUS_MAP),
+        "charge_source_priority": _map_enum(inverter.get("cSPri"), CHARGE_SOURCE_PRIORITY_MAP),
+        "max_ac_charge_current_limit": _round_number(inverter.get("MACCurr"), 0),
+        "smart_port_status": _map_enum(inverter.get("SmartS"), SMART_PORT_STATUS_MAP),
+        "system_power_status": _map_enum(inverter.get("SPStus"), SYSTEM_POWER_STATUS_MAP),
+        "bms_fault_code": _integer(bms.get("BBfault")),
+        "bms_warning_code": _integer(bms.get("BBwarn")),
+        "bms_state": _integer(bms.get("Bstate")),
+        "bms_pack_voltage": _scaled_number(_nested(bms, "BattList", 0, 0), 0.001, 2),
+        "bms_pack_current": _scaled_number(_nested(bms, "BattList", 1, 0), 0.1, 1),
+        "bms_pack_soc": _scaled_number(_nested(bms, "BatsocList", 0, 0), 0.01, 1),
+        "bms_pack_state_of_health": _scaled_number(_nested(bms, "BatsocList", 0, 1), 0.1, 1),
+        "bms_total_capacity": _scaled_number(_nested(bms, "BatsocList", 0, 2), 0.001, 3),
+        "bms_max_cell_voltage": _scaled_number(_nested(bms, "BMaxMin", 0, 0), 0.001, 3),
+        "bms_min_cell_voltage": _scaled_number(_nested(bms, "BMaxMin", 0, 1), 0.001, 3),
+        "bms_max_cell_temperature": _round_number(_nested(bms, "BMaxMin", 1, 0), 1),
+        "bms_min_cell_temperature": _round_number(_nested(bms, "BMaxMin", 1, 1), 1),
+        "bms_parallel_count": _integer(_nested(bms, "BMSpara", 0, 0)),
+        "bms_hardware_config": _integer(_nested(bms, "BMSpara", 0, 1)),
+        "bms_charge_voltage_limit": _scaled_number(_nested(bms, "BLVolCu", 0, 0), 0.1, 1),
+        "bms_discharge_voltage_limit": _scaled_number(_nested(bms, "BLVolCu", 0, 1), 0.1, 1),
+        "bms_charge_current_limit": _scaled_number(_nested(bms, "BLVolCu", 1, 0), 0.1, 1),
+        "bms_discharge_current_limit": _scaled_number(_nested(bms, "BLVolCu", 1, 1), 0.1, 1),
+        "bms_temperature_1": _normalize_temperature(_nested(bms, "Templist", 0, 0)),
+        "bms_temperature_2": _normalize_temperature(_nested(bms, "Templist", 0, 1)),
         "raw_json_payload": _coerce_string(inverter.get("date")) or "available",
         "_raw_payloads": {
             key: response.raw
@@ -215,28 +322,7 @@ def normalize_telemetry(
     if port is not None:
         normalized["port"] = port
 
-    _populate_cell_telemetry(normalized, bms)
     return normalized
-
-
-def _populate_cell_telemetry(target: dict[str, Any], bms: dict[str, Any]) -> None:
-    cell_values = _nested(bms, "BatcelList", 0)
-    for index in range(16):
-        key = f"battery_cell_{index + 1}_voltage"
-        raw_value = _nested(cell_values, index)
-        if raw_value in (None, 0):
-            target[key] = None
-            continue
-        target[key] = _scaled_number(raw_value, 0.001, 3)
-
-    temperature_values = _nested(bms, "BtemList", 0)
-    for index in range(8):
-        key = f"battery_cell_{index + 1}_temperature"
-        raw_value = _nested(temperature_values, index)
-        if raw_value in (None, 0):
-            target[key] = None
-            continue
-        target[key] = _normalize_temperature(raw_value)
 
 
 def _response_objects(raw_data: RawPollData, key: str) -> list[dict[str, Any]]:
@@ -318,49 +404,136 @@ def _is_bms_object(obj: dict[str, Any], inverter_serial: str | None) -> bool:
 
 
 def _extract_pv_metrics(block: Any) -> dict[str, Any]:
-    voltage = _scaled_number(_nested(block, 0, 0), 0.1, 1)
-    aggregated_current = _number(_nested(block, 1, 0))
-    aggregated_power = _number(_nested(block, 2, 0))
-
-    legacy_currents = [_number(_nested(block, index, 1)) for index in range(3)]
-    legacy_powers = [_number(_nested(block, index, 2)) for index in range(3)]
-    total_power = _number(_nested(block, 3, 0))
-
-    use_aggregated_layout = (
-        aggregated_current is not None
-        and all(value in (None, 0) for value in legacy_currents)
-        and all(value in (None, 0) for value in legacy_powers)
-    )
-
-    if use_aggregated_layout:
+    if _pv_is_row_aggregated(block):
+        voltage = _scaled_number(_nested(block, 0, 0), 0.1, 1)
+        current = _scaled_number(_nested(block, 1, 0), 0.1, 1)
+        power = _round_number(_nested(block, 2, 0), 0)
+        total_power = _round_number(
+            _first_non_zero_number(_nested(block, 3, 0), _nested(block, 2, 0)),
+            0,
+        )
         return {
-            "layout": "aggregated",
+            "layout": "row_aggregated",
             "voltage": voltage,
-            "current": _scaled_number(aggregated_current, 0.1, 1),
-            "power": _round_number(_first_number(aggregated_power, total_power), 0),
+            "current": current,
+            "power": power,
+            "total_power": total_power if total_power is not None else power,
+            "pv1_voltage": voltage,
+            "pv1_current": current,
+            "pv1_power": power,
+            "pv2_voltage": None,
+            "pv2_current": None,
+            "pv2_power": None,
+            "pv3_voltage": None,
+            "pv3_current": None,
+            "pv3_power": None,
         }
 
-    current_values = [value for value in legacy_currents if value is not None]
-    current = None
-    if current_values:
-        current = _round_number(sum(value / 10.0 for value in current_values), 1)
-    elif aggregated_current is not None:
-        current = _scaled_number(aggregated_current, 0.1, 1)
+    pv1_voltage = _scaled_number(_nested(block, 0, 0), 0.1, 1)
+    pv1_current = _scaled_number(_nested(block, 0, 1), 0.1, 1)
+    pv1_power = _round_number(_nested(block, 0, 2), 0)
 
-    power_value = total_power
-    if power_value is None:
-        power_candidates = [value for value in legacy_powers if value is not None]
-        if power_candidates:
-            power_value = sum(power_candidates)
-        else:
-            power_value = aggregated_power
+    pv2_voltage = _scaled_number(_nested(block, 1, 0), 0.1, 1)
+    pv2_current = _scaled_number(_nested(block, 1, 1), 0.1, 1)
+    pv2_power = _round_number(_nested(block, 1, 2), 0)
+
+    pv3_voltage = _scaled_number(_nested(block, 2, 0), 0.1, 1)
+    pv3_current = _scaled_number(_nested(block, 2, 1), 0.1, 1)
+    pv3_power = _round_number(_nested(block, 2, 2), 0)
+
+    total_power = _round_number(_nested(block, 3, 0), 0)
+
+    aggregated_layout = _pv_is_aggregated(block)
+    if aggregated_layout:
+        pv1_voltage = _scaled_number(_nested(block, 0, 0), 0.1, 1)
+        pv1_current = _scaled_number(_nested(block, 1, 0), 0.1, 1)
+        pv1_power = _round_number(
+            _first_non_zero_number(_nested(block, 2, 0), _nested(block, 3, 0)),
+            0,
+        )
+        total_power = _round_number(
+            _first_non_zero_number(_nested(block, 3, 0), _nested(block, 2, 0)),
+            0,
+        )
+        return {
+            "layout": "aggregated",
+            "voltage": pv1_voltage,
+            "current": pv1_current,
+            "power": pv1_power,
+            "total_power": total_power if total_power is not None else pv1_power,
+            "pv1_voltage": pv1_voltage,
+            "pv1_current": pv1_current,
+            "pv1_power": pv1_power,
+            "pv2_voltage": None,
+            "pv2_current": None,
+            "pv2_power": None,
+            "pv3_voltage": None,
+            "pv3_current": None,
+            "pv3_power": None,
+        }
+
+    total_current = _sum_numbers(pv1_current, pv2_current, pv3_current)
+    if total_power is None:
+        total_power = _round_number(_sum_numbers(pv1_power, pv2_power, pv3_power), 0)
 
     return {
         "layout": "legacy",
-        "voltage": voltage,
-        "current": current,
-        "power": _round_number(power_value, 0),
+        "voltage": pv1_voltage,
+        "current": total_current,
+        "power": total_power,
+        "total_power": total_power,
+        "pv1_voltage": pv1_voltage,
+        "pv1_current": pv1_current,
+        "pv1_power": pv1_power,
+        "pv2_voltage": pv2_voltage,
+        "pv2_current": pv2_current,
+        "pv2_power": pv2_power,
+        "pv3_voltage": pv3_voltage,
+        "pv3_current": pv3_current,
+        "pv3_power": pv3_power,
     }
+
+
+def _pv_is_aggregated(block: Any) -> bool:
+    voltage = _number(_nested(block, 0, 0))
+    string1_current = _number(_nested(block, 0, 1))
+    string1_power = _number(_nested(block, 0, 2))
+    aggregate_current = _number(_nested(block, 1, 0))
+    aggregate_power = _number(_nested(block, 2, 0))
+
+    if voltage is None or voltage <= 500:
+        return False
+    if string1_current not in (None, 0):
+        return False
+    if string1_power not in (None, 0):
+        return False
+    if aggregate_current is None and aggregate_power is None:
+        return False
+    return True
+
+
+def _pv_is_row_aggregated(block: Any) -> bool:
+    voltage = _number(_nested(block, 0, 0))
+    current = _number(_nested(block, 1, 0))
+    power = _number(_nested(block, 2, 0))
+
+    if voltage is None or current is None or power is None:
+        return False
+
+    if _number(_nested(block, 0, 1)) not in (None, 0):
+        return False
+    if _number(_nested(block, 0, 2)) not in (None, 0):
+        return False
+    if _number(_nested(block, 1, 1)) not in (None, 0):
+        return False
+    if _number(_nested(block, 1, 2)) not in (None, 0):
+        return False
+    if _number(_nested(block, 2, 1)) not in (None, 0):
+        return False
+    if _number(_nested(block, 2, 2)) not in (None, 0):
+        return False
+
+    return voltage > 0 and current >= 0 and power >= 0
 
 
 def _extract_ac_metrics(block: Any) -> dict[str, Any]:
@@ -368,8 +541,8 @@ def _extract_ac_metrics(block: Any) -> dict[str, Any]:
     current = _scaled_number(_nested(block, 1, 0), 0.1, 1)
 
     slot2 = _number(_nested(block, 2, 0))
-    slot3_power = _number(_nested(block, 3, 0))
-    slot3_apparent = _number(_nested(block, 3, 1))
+    slot3_primary = _number(_nested(block, 3, 0))
+    slot3_secondary = _number(_nested(block, 3, 1))
     slot4 = _number(_nested(block, 4, 0))
 
     expected_apparent = None
@@ -377,45 +550,38 @@ def _extract_ac_metrics(block: Any) -> dict[str, Any]:
         expected_apparent = float(voltage) * float(current)
 
     slot2_frequency = _candidate_frequency(slot2)
-    slot3_frequency = _candidate_frequency(slot3_power)
+    slot3_frequency = _candidate_frequency(slot3_primary)
     slot4_frequency = _candidate_frequency(slot4)
 
     use_frequency_layout = False
     if slot2_frequency is not None:
         score = 0
-        if slot3_apparent is not None and expected_apparent is not None:
+        if slot3_secondary is not None and expected_apparent is not None:
             tolerance = max(50.0, expected_apparent * 0.35)
-            if abs(slot3_apparent - expected_apparent) <= tolerance:
+            if abs(slot3_secondary - expected_apparent) <= tolerance:
                 score += 2
             score += 1
-
-        if (
-            slot3_power is not None
-            and expected_apparent is not None
-            and (expected_apparent > 0 or slot3_apparent is not None)
-        ):
-            tolerance = max(75.0, expected_apparent * 0.75)
-            if abs(abs(slot3_power) - expected_apparent) <= tolerance:
-                score += 1
-
+        if slot4 is not None and slot4 >= 0:
+            score += 1
         use_frequency_layout = score >= 1
 
+    layout = "power_index_2"
     frequency = None
     active_power = None
-    layout = "power_index_2"
+    apparent_power = None
+    total_power = None
 
     if use_frequency_layout:
         layout = "frequency_index_2"
         frequency = slot2_frequency
-        active_power = slot3_power
-        if active_power is None:
-            active_power = slot2
+        active_power = slot3_primary
+        apparent_power = slot3_secondary
+        total_power = slot4 if slot4 not in (None, 0) else slot3_primary
     else:
-        active_power = slot2 if slot2 is not None else slot3_power
+        active_power = slot2 if slot2 is not None else slot3_primary
         frequency = slot3_frequency or slot4_frequency
-
-    if active_power is None and slot3_apparent is not None:
-        active_power = slot3_apparent
+        apparent_power = slot3_secondary
+        total_power = slot4 if slot4 not in (None, 0) else active_power
 
     return {
         "layout": layout,
@@ -423,7 +589,28 @@ def _extract_ac_metrics(block: Any) -> dict[str, Any]:
         "current": current,
         "frequency": frequency,
         "power": _round_number(active_power, 0),
+        "apparent_power": _round_number(apparent_power, 0),
+        "total_power": _round_number(total_power, 0),
     }
+
+
+def _extract_energy_metrics(block: Any) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    for prefix, row_index, period_indexes in (
+        ("pv_yield_energy", 0, {"total": 1, "daily": 2, "monthly": 3, "yearly": 4}),
+        ("load_consumption_energy", 1, {"total": 1, "daily": 2, "monthly": 3, "yearly": 4}),
+        ("grid_export_energy", 2, {"daily": 1, "monthly": 2, "yearly": 3, "total": 4}),
+        ("grid_import_energy", 3, {"daily": 1, "monthly": 2, "yearly": 3, "total": 4}),
+        ("battery_charge_energy", 4, {"daily": 1, "monthly": 2, "yearly": 3, "total": 4}),
+        ("battery_discharge_energy", 5, {"daily": 1, "monthly": 2, "yearly": 3, "total": 4}),
+    ):
+        for period, index in period_indexes.items():
+            metrics[f"{prefix}_{period}"] = _scaled_number(
+                _nested(block, row_index, index),
+                0.001,
+                3,
+            )
+    return metrics
 
 
 def _candidate_frequency(value: float | int | None) -> float | None:
@@ -443,6 +630,13 @@ def _map_mode(value: Any) -> str | None:
     if mode is None:
         return None
     return MODE_MAP.get(mode, f"unknown ({mode})")
+
+
+def _map_enum(value: Any, mapping: dict[int, str]) -> str | None:
+    raw = _integer(value)
+    if raw is None:
+        return None
+    return mapping.get(raw, str(raw))
 
 
 def _normalize_temperature(value: Any) -> float | None:
@@ -473,6 +667,26 @@ def _first_number(*values: Any) -> float | int | None:
         if isinstance(value, (int, float)):
             return value
     return None
+
+
+def _first_non_zero_number(*values: Any) -> float | int | None:
+    zero_candidate: float | int | None = None
+    for value in values:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            if float(value) != 0.0:
+                return value
+            if zero_candidate is None:
+                zero_candidate = value
+    return zero_candidate
+
+
+def _sum_numbers(*values: Any) -> float | None:
+    numbers = [float(value) for value in values if isinstance(value, (int, float))]
+    if not numbers:
+        return None
+    return sum(numbers)
 
 
 def _number(value: Any) -> float | None:

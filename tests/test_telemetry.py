@@ -34,7 +34,14 @@ def _sample_poll_data() -> RawPollData:
             "Temp": [[380, 300, 340]],
             "Batt": [[55970], [140], [783, 0]],
             "Batsoc": [[9700, 0, 0]],
-            "Energy": [[0, 1536, 1536, 1536, 1536]],
+            "Energy": [
+                [0, 1536, 1536, 1536, 1536],
+                [0, 2485, 863, 2485, 2485],
+                [0, 120, 240, 360, 480],
+                [0, 80, 160, 240, 320],
+                [0, 50, 100, 150, 200],
+                [0, 40, 80, 120, 160],
+            ],
             "GEN": [[0, None, None], [0, None, None], [0, None, None], [0, 0], [0, None, None]],
             "SmartL": [[0, None, None], [0, None, None], [0, None, None], [0, 0], [0, None, None]],
         },
@@ -99,6 +106,9 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["firmware_version"], "2.13")
         self.assertEqual(data["device_software_version"], "110")
         self.assertEqual(data["device_hardware_version"], "1000")
+        self.assertEqual(data["bms_firmware_version"], "2.13")
+        self.assertEqual(data["bms_device_serial"], "072604810025520550")
+        self.assertEqual(data["bms_inverter_serial"], "020906004825471655")
         self.assertEqual(data["_raw_bms"]["DevSN"], "072604810025520550")
 
     @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
@@ -111,20 +121,45 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["battery_charge_power"], 783)
         self.assertEqual(data["battery_discharge_power"], 0)
         self.assertEqual(data["battery_soc"], 97.0)
+        self.assertEqual(data["battery_state_of_health"], 100.0)
+        self.assertEqual(data["battery_capacity"], 100.0)
         self.assertEqual(data["pv_voltage"], 182.3)
         self.assertEqual(data["pv_current"], 6.4)
         self.assertEqual(data["pv_power"], 1176)
-        self.assertEqual(data["bus_voltage"], 43.15)
+        self.assertEqual(data["pv_total_power"], 1176)
+        self.assertEqual(data["pv1_voltage"], 182.3)
+        self.assertEqual(data["pv1_current"], 6.4)
+        self.assertEqual(data["pv1_power"], 1176)
+        self.assertEqual(data["bus_voltage"], 431.5)
         self.assertEqual(data["inverter_mode"], "hybrid")
         self.assertEqual(data["inverter_temperature"], 38.0)
+        self.assertEqual(data["transformer_temperature"], 38.0)
+        self.assertEqual(data["heatsink_temperature"], 30.0)
+        self.assertEqual(data["ambient_temperature"], 34.0)
         self.assertEqual(data["battery_temperature"], 15.0)
         self.assertEqual(data["grid_frequency"], 49.41)
         self.assertEqual(data["output_frequency"], 49.41)
         self.assertEqual(data["load_power"], 180)
+        self.assertEqual(data["load_apparent_power"], 207)
         self.assertEqual(data["pv_to_load_power"], 180)
         self.assertEqual(data["pv_to_battery_power"], 783)
         self.assertEqual(data["pv_to_grid_power"], 213)
         self.assertEqual(data["battery_to_load_power"], 0)
+        self.assertEqual(data["power_flow_status_raw"], 62689)
+        self.assertEqual(data["pv_yield_energy_total"], 1.536)
+        self.assertEqual(data["pv_yield_energy_daily"], 1.536)
+        self.assertEqual(data["load_consumption_energy_total"], 2.485)
+        self.assertEqual(data["load_consumption_energy_daily"], 0.863)
+        self.assertEqual(data["load_consumption_energy_monthly"], 2.485)
+        self.assertEqual(data["grid_export_energy_total"], 0.48)
+        self.assertEqual(data["grid_import_energy_total"], 0.32)
+        self.assertEqual(data["battery_charge_energy_total"], 0.2)
+        self.assertEqual(data["battery_discharge_energy_total"], 0.16)
+        self.assertEqual(data["bms_pack_voltage"], 55.87)
+        self.assertEqual(data["bms_pack_current"], 15.0)
+        self.assertEqual(data["bms_pack_soc"], 97.0)
+        self.assertEqual(data["bms_total_capacity"], 100.0)
+        self.assertNotIn("inverter_throughput_energy", data)
 
     @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
     def test_normalize_telemetry_supports_power_first_ac_layout(self) -> None:
@@ -170,6 +205,8 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["grid_frequency"], 50.0)
         self.assertEqual(data["load_power"], 1500)
         self.assertEqual(data["output_frequency"], 50.0)
+        self.assertEqual(data["pv_power"], 300)
+        self.assertEqual(data["pv_total_power"], 300)
         self.assertEqual(data["battery_charge_power"], 0)
         self.assertEqual(data["battery_discharge_power"], 200)
 
@@ -213,3 +250,43 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["self_consumption_percent"], 80.0)
         self.assertEqual(data["battery_charge_power"], 300)
         self.assertEqual(data["battery_discharge_power"], 0)
+
+    @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
+    def test_normalize_telemetry_supports_per_string_pv_layout(self) -> None:
+        poll_data = RawPollData(
+            responses={
+                "real": ParsedResponse(
+                    command="real",
+                    raw="real",
+                    objects=[
+                        {
+                            "DevSN": "INV-3",
+                            "Type": 80,
+                            "SubType": 1035,
+                            "PV": [[1200, 50, 600], [1100, 40, 440], [0, 0, 0], [1040]],
+                            "Batt": [[52000], [0], [0, 0]],
+                            "Batsoc": [[8000, 0, 0]],
+                        }
+                    ],
+                ),
+                "basic": ParsedResponse(
+                    command="basic",
+                    raw="basic",
+                    objects=[{"DevSN": "INV-3", "Type": 80, "version": "2.20"}],
+                ),
+                "set": ParsedResponse(command="set", raw="set", objects=[]),
+            }
+        )
+
+        data = normalize_telemetry(poll_data)
+
+        self.assertEqual(data["pv1_voltage"], 120.0)
+        self.assertEqual(data["pv1_current"], 5.0)
+        self.assertEqual(data["pv1_power"], 600)
+        self.assertEqual(data["pv2_voltage"], 110.0)
+        self.assertEqual(data["pv2_current"], 4.0)
+        self.assertEqual(data["pv2_power"], 440)
+        self.assertEqual(data["pv3_voltage"], 0.0)
+        self.assertEqual(data["pv3_current"], 0.0)
+        self.assertEqual(data["pv3_power"], 0)
+        self.assertEqual(data["pv_total_power"], 1040)
