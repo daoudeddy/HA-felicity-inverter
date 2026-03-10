@@ -1,9 +1,6 @@
 from __future__ import annotations
-# -*- coding: utf-8 -*-
 
 from dataclasses import dataclass
-from datetime import datetime
-import math
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -14,37 +11,35 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_HOST,
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
-    UnitOfPower,
     UnitOfEnergy,
+    UnitOfPower,
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .entity import FelicityCoordinatorEntity
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
 class FelicitySensorDescription(SensorEntityDescription):
-    """Extended description for Felicity sensors."""
+    """Extended sensor description for Felicity telemetry."""
 
 
 SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
-    # --- Main telemetry ---
     FelicitySensorDescription(
         key="battery_soc",
         name="Battery SOC",
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:battery",
         suggested_display_precision=1,
+        icon="mdi:battery",
     ),
     FelicitySensorDescription(
         key="battery_voltage",
@@ -52,784 +47,402 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-dc",
         suggested_display_precision=2,
+        icon="mdi:battery-high",
+    ),
+    FelicitySensorDescription(
+        key="battery_current",
+        name="Battery Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="battery_power",
+        name="Battery Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-arrow-up-outline",
+    ),
+    FelicitySensorDescription(
+        key="battery_charge_power",
+        name="Battery Charge Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-charging",
+    ),
+    FelicitySensorDescription(
+        key="battery_discharge_power",
+        name="Battery Discharge Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-minus",
+    ),
+    FelicitySensorDescription(
+        key="battery_charge_current",
+        name="Battery Charge Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="battery_discharge_current",
+        name="Battery Discharge Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="battery_temperature",
+        name="Battery Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-heart-variant",
+    ),
+    FelicitySensorDescription(
+        key="pv_voltage",
+        name="PV Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:solar-panel",
+    ),
+    FelicitySensorDescription(
+        key="pv_current",
+        name="PV Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:current-dc",
+    ),
+    FelicitySensorDescription(
+        key="pv_power",
+        name="PV Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:solar-power",
+    ),
+    FelicitySensorDescription(
+        key="grid_voltage",
+        name="Grid Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:transmission-tower",
+    ),
+    FelicitySensorDescription(
+        key="grid_current",
+        name="Grid Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:current-ac",
+    ),
+    FelicitySensorDescription(
+        key="grid_frequency",
+        name="Grid Frequency",
+        native_unit_of_measurement="Hz",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:sine-wave",
+    ),
+    FelicitySensorDescription(
+        key="grid_import_power",
+        name="Grid Import Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-import",
+    ),
+    FelicitySensorDescription(
+        key="grid_export_power",
+        name="Grid Export Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-export",
+    ),
+    FelicitySensorDescription(
+        key="load_voltage",
+        name="Load Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:home-lightning-bolt",
+    ),
+    FelicitySensorDescription(
+        key="load_current",
+        name="Load Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:current-ac",
+    ),
+    FelicitySensorDescription(
+        key="output_frequency",
+        name="Output Frequency",
+        native_unit_of_measurement="Hz",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:sine-wave",
+    ),
+    FelicitySensorDescription(
+        key="load_power",
+        name="Load Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:home-lightning-bolt-outline",
+    ),
+    FelicitySensorDescription(
+        key="generator_voltage",
+        name="Generator Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:engine",
+    ),
+    FelicitySensorDescription(
+        key="generator_current",
+        name="Generator Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:engine",
+    ),
+    FelicitySensorDescription(
+        key="generator_power",
+        name="Generator Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:engine",
+    ),
+    FelicitySensorDescription(
+        key="smart_load_voltage",
+        name="Smart Load Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:lightning-bolt-circle",
+    ),
+    FelicitySensorDescription(
+        key="smart_load_current",
+        name="Smart Load Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:lightning-bolt-circle",
+    ),
+    FelicitySensorDescription(
+        key="smart_load_power",
+        name="Smart Load Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:lightning-bolt-circle",
+    ),
+    FelicitySensorDescription(
+        key="inverter_temperature",
+        name="Inverter Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:thermometer",
+    ),
+    FelicitySensorDescription(
+        key="bus_voltage",
+        name="Bus Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:current-dc",
     ),
     FelicitySensorDescription(
         key="load_percent",
         name="Load",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         icon="mdi:gauge",
-        suggested_display_precision=1,
     ),
-
-    # --- AC input ---
     FelicitySensorDescription(
-        key="ac_in_voltage",
-        name="AC In Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
+        key="pv_to_load_power",
+        name="PV to Load Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-ac",
-        suggested_display_precision=1,
+        icon="mdi:arrow-right-bold-circle",
     ),
     FelicitySensorDescription(
-        key="ac_in_current",
-        name="AC In Current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
+        key="pv_to_battery_power",
+        name="PV to Battery Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-ac",
-        suggested_display_precision=1,
+        icon="mdi:arrow-down-bold-circle",
     ),
     FelicitySensorDescription(
-        key="ac_in_frequency",
-        name="AC In Frequency",
-        native_unit_of_measurement="Hz",
+        key="pv_to_grid_power",
+        name="PV to Grid Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:sine-wave",
-        suggested_display_precision=2,
+        icon="mdi:arrow-up-bold-circle",
     ),
     FelicitySensorDescription(
-        key="ac_in_power",
-        name="AC In Power",
+        key="battery_to_load_power",
+        name="Battery to Load Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-arrow-down-outline",
+    ),
+    FelicitySensorDescription(
+        key="grid_to_load_power",
+        name="Grid to Load Power",
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:transmission-tower",
     ),
-
-    # --- AC output ---
     FelicitySensorDescription(
-        key="ac_out_voltage",
-        name="AC Out Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
+        key="self_consumption_percent",
+        name="Self Consumption",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-ac",
         suggested_display_precision=1,
+        icon="mdi:percent",
     ),
     FelicitySensorDescription(
-        key="ac_out_current",
-        name="AC Out Current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
+        key="battery_roundtrip_efficiency",
+        name="Battery Roundtrip Efficiency",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-ac",
         suggested_display_precision=1,
+        icon="mdi:battery-sync",
     ),
     FelicitySensorDescription(
-        key="ac_out_frequency",
-        name="AC Out Frequency",
-        native_unit_of_measurement="Hz",
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:sine-wave",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="ac_out_power",
-        name="AC Out Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home-lightning-bolt",
-    ),
-
-    # --- PV input (PV[][]) ---
-    FelicitySensorDescription(
-        key="pv1_voltage",
-        name="PV1 Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-panel",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="pv1_current",
-        name="PV1 Current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-dc",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="pv1_power",
-        name="PV1 Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-power",
-    ),
-    FelicitySensorDescription(
-        key="pv2_voltage",
-        name="PV2 Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-panel",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="pv2_current",
-        name="PV2 Current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-dc",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="pv2_power",
-        name="PV2 Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-power",
-    ),
-    FelicitySensorDescription(
-        key="pv3_voltage",
-        name="PV3 Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-panel",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="pv3_current",
-        name="PV3 Current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-dc",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="pv3_power",
-        name="PV3 Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-power",
-    ),
-    FelicitySensorDescription(
-        key="pv_total_power",
-        name="PV Total Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-power",
-    ),
-
-    # --- Energy counters (Energy[0..7] -> [0,total,day,month,year], values in Wh) ---
-    FelicitySensorDescription(
-        key="energy_pv_today",
-        name="PV энергия за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-power",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_pv_month",
-        name="PV энергия за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-power",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_pv_year",
-        name="PV энергия за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:solar-power",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_pv_total",
-        name="PV энергия всего",
+        key="inverter_throughput_energy",
+        name="Inverter Throughput Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:solar-power",
-        suggested_display_precision=2,
-    ),
-
-    FelicitySensorDescription(
-        key="energy_backup_load_today",
-        name="Резервная нагрузка за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home-lightning-bolt",
-        suggested_display_precision=2,
+        suggested_display_precision=3,
+        icon="mdi:counter",
     ),
     FelicitySensorDescription(
-        key="energy_backup_load_month",
-        name="Резервная нагрузка за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home-lightning-bolt",
-        suggested_display_precision=2,
+        key="inverter_mode",
+        name="Inverter Mode",
+        icon="mdi:home-switch",
     ),
     FelicitySensorDescription(
-        key="energy_backup_load_year",
-        name="Резервная нагрузка за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home-lightning-bolt",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_backup_load_total",
-        name="Резервная нагрузка всего",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:home-lightning-bolt",
-        suggested_display_precision=2,
-    ),
-
-    FelicitySensorDescription(
-        key="energy_grid_import_today",
-        name="Потребляемая энергия за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-import",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_grid_import_month",
-        name="Потребляемая энергия за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-import",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_grid_import_year",
-        name="Потребляемая энергия за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-import",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_grid_import_total",
-        name="Потребляемая энергия всего",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:transmission-tower-import",
-        suggested_display_precision=2,
-    ),
-
-    FelicitySensorDescription(
-        key="energy_grid_export_today",
-        name="Мощность питания за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-export",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_grid_export_month",
-        name="Мощность питания за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-export",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_grid_export_year",
-        name="Мощность питания за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-export",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_grid_export_total",
-        name="Мощность питания всего",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:transmission-tower-export",
-        suggested_display_precision=2,
-    ),
-
-    FelicitySensorDescription(
-        key="energy_battery_charge_today",
-        name="Заряд АКБ за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:battery-charging",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_battery_charge_month",
-        name="Заряд АКБ за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:battery-charging",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_battery_charge_year",
-        name="Заряд АКБ за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:battery-charging",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_battery_charge_total",
-        name="Заряд АКБ всего",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:battery-charging",
-        suggested_display_precision=2,
-    ),
-
-    FelicitySensorDescription(
-        key="energy_battery_discharge_today",
-        name="Разряд АКБ за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:battery-minus",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_battery_discharge_month",
-        name="Разряд АКБ за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:battery-minus",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_battery_discharge_year",
-        name="Разряд АКБ за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:battery-minus",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_battery_discharge_total",
-        name="Разряд АКБ всего",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:battery-minus",
-        suggested_display_precision=2,
-    ),
-
-    FelicitySensorDescription(
-        key="energy_home_load_today",
-        name="Домашняя нагрузка за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_home_load_month",
-        name="Домашняя нагрузка за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_home_load_year",
-        name="Домашняя нагрузка за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_home_load_total",
-        name="Домашняя нагрузка всего",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:home",
-        suggested_display_precision=2,
-    ),
-
-    FelicitySensorDescription(
-        key="energy_total_load_today",
-        name="Общая нагрузка за день",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home-lightning-bolt-outline",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_total_load_month",
-        name="Общая нагрузка за месяц",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home-lightning-bolt-outline",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_total_load_year",
-        name="Общая нагрузка за год",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:home-lightning-bolt-outline",
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="energy_total_load_total",
-        name="Общая нагрузка всего",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        icon="mdi:home-lightning-bolt-outline",
-        suggested_display_precision=2,
-    ),
-
-    # --- Temperatures (Temp[0][..]) ---
-    FelicitySensorDescription(
-        key="temp_1",
-        name="Temperature 1",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:thermometer",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="temp_2",
-        name="Temperature 2",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:thermometer",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="temp_3",
-        name="Temperature 3",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:thermometer",
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="temp_4",
-        name="Temperature 4",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:thermometer",
-        suggested_display_precision=1,
-    ),
-
-    # --- Diagnostics / codes ---
-    FelicitySensorDescription(
-        key="work_mode",
-        name="Work Mode",
-        icon="mdi:cog",
+        key="inverter_warning_code",
+        name="Inverter Warning Code",
         entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="warning_code",
-        name="Warning Code",
         icon="mdi:alert",
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     FelicitySensorDescription(
-        key="fault_code",
-        name="Fault Code",
-        icon="mdi:alert-octagon",
+        key="inverter_fault_code",
+        name="Inverter Fault Code",
         entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:alert-octagon",
+    ),
+    FelicitySensorDescription(
+        key="device_serial",
+        name="Device Serial",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:identifier",
+    ),
+    FelicitySensorDescription(
+        key="wifi_serial",
+        name="WiFi Serial",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:wifi",
     ),
     FelicitySensorDescription(
         key="firmware_version",
         name="Firmware Version",
+        entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:chip",
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     FelicitySensorDescription(
-        key="last_update_raw",
-        name="Last Update (Raw)",
-        icon="mdi:clock-outline",
+        key="device_software_version",
+        name="Device Software Version",
         entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:chip",
     ),
     FelicitySensorDescription(
-        key="parallel_status",
-        name="Parallel Status",
-        icon="mdi:link-variant",
+        key="device_hardware_version",
+        name="Device Hardware Version",
         entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:chip",
     ),
     FelicitySensorDescription(
-        key="telemetry_raw",
-        name="Telemetry (Raw Blocks)",
+        key="raw_json_payload",
+        name="Raw JSON Payload",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         icon="mdi:code-json",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-
-    # --- Settings (dev set infor) ---
-    FelicitySensorDescription(
-        key="settings_summary",
-        name="Settings Summary",
-        icon="mdi:tune",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_operating_mode",
-        name="Setting Operating Mode",
-        icon="mdi:cog-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_ac_nominal_voltage",
-        name="Setting AC Nominal Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:flash",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_over_voltage",
-        name="Setting Grid Over Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:arrow-up-bold",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_under_voltage",
-        name="Setting Grid Under Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:arrow-down-bold",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_over_frequency",
-        name="Setting Grid Over Frequency",
-        native_unit_of_measurement="Hz",
-        icon="mdi:waveform",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_under_frequency",
-        name="Setting Grid Under Frequency",
-        native_unit_of_measurement="Hz",
-        icon="mdi:waveform",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=2,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_type",
-        name="Setting Battery Type",
-        icon="mdi:battery-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_count",
-        name="Setting Battery Count",
-        icon="mdi:numeric",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_charge_voltage",
-        name="Setting Battery Charge Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:battery-charging",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_float_voltage",
-        name="Setting Battery Float Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:battery",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_max_charge_current",
-        name="Setting Battery Max Charge Current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
-        icon="mdi:current-ac",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_max_discharge_current",
-        name="Setting Battery Max Discharge Current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
-        icon="mdi:current-ac",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_zero_export_mode",
-        name="Setting Zero Export Mode",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_zero_export_power",
-        name="Setting Zero Export Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_buzzer_enabled",
-        name="Setting Buzzer Enabled",
-        icon="mdi:volume-high",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_stand",
-        name="Setting Stand (Stand)",
-        icon="mdi:power-standby",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_ac_nominal_frequency_raw",
-        name="Setting AC Nominal Frequency (Aorfre, raw)",
-        icon="mdi:waveform",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_over_voltage_time_raw",
-        name="Setting Grid Over Voltage Time (FGOVT, raw)",
-        icon="mdi:timer-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_under_voltage_time_raw",
-        name="Setting Grid Under Voltage Time (FGUVT, raw)",
-        icon="mdi:timer-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_over_frequency_time_raw",
-        name="Setting Grid Over Frequency Time (FGOFqT, raw)",
-        icon="mdi:timer-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_under_frequency_time_raw",
-        name="Setting Grid Under Frequency Time (FGUFT, raw)",
-        icon="mdi:timer-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_grid_over_voltage_10min",
-        name="Setting Grid Over Voltage 10min (tenGOV)",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_secondary_grid_over_voltage",
-        name="Setting Secondary Grid Over Voltage (sGOV)",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_secondary_grid_under_voltage",
-        name="Setting Secondary Grid Under Voltage (sGUV)",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_generator_cooldown_time_raw",
-        name="Setting Generator Cooldown Time (GCWT, raw)",
-        icon="mdi:timer-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_generator_pv_start_delay_raw",
-        name="Setting Generator PV Start Delay (GPSl, raw)",
-        icon="mdi:timer-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_cv_over_grid",
-        name="Setting Battery CV Over Grid (BCVOG)",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:battery-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_cv_float_grid",
-        name="Setting Battery CV Float Grid (BCVFG)",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:battery-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
-    ),
-    FelicitySensorDescription(
-        key="set_battery_rv_over_grid",
-        name="Setting Battery RV Over Grid (BRVOG)",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        icon="mdi:battery-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=1,
     ),
 )
+
+
+CELL_SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = tuple(
+    [
+        FelicitySensorDescription(
+            key=f"battery_cell_{index}_voltage",
+            name=f"Battery Cell {index} Voltage",
+            native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+            device_class=SensorDeviceClass.VOLTAGE,
+            state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=3,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:battery-outline",
+        )
+        for index in range(1, 17)
+    ]
+    + [
+        FelicitySensorDescription(
+            key=f"battery_cell_{index}_temperature",
+            name=f"Battery Cell {index} Temperature",
+            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+            device_class=SensorDeviceClass.TEMPERATURE,
+            state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=1,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:thermometer",
+        )
+        for index in range(1, 9)
+    ]
+)
+
+
+ALL_SENSOR_DESCRIPTIONS = SENSOR_DESCRIPTIONS + CELL_SENSOR_DESCRIPTIONS
 
 
 async def async_setup_entry(
@@ -837,20 +450,17 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Felicity inverter sensors based on a config entry."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data["coordinator"]
+    """Set up Felicity sensors from a config entry."""
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    coordinator = runtime.coordinator
 
-    entities: list[FelicitySensor] = [
-        FelicitySensor(coordinator, entry, desc) for desc in SENSOR_DESCRIPTIONS
-    ]
-    async_add_entities(entities)
+    async_add_entities(
+        [FelicitySensor(coordinator, entry, description) for description in ALL_SENSOR_DESCRIPTIONS]
+    )
 
 
-class FelicitySensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Felicity inverter sensor."""
-
-    _attr_has_entity_name = True
+class FelicitySensor(FelicityCoordinatorEntity, SensorEntity):
+    """Representation of a normalized Felicity sensor."""
 
     def __init__(
         self,
@@ -858,701 +468,41 @@ class FelicitySensor(CoordinatorEntity, SensorEntity):
         entry: ConfigEntry,
         description: FelicitySensorDescription,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self.entity_description = description
-        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
 
-        # Per-entity cache for *_today glitch-filtering
-        self._energy_today_last_kwh: float | None = None
-        self._energy_today_last_ts: datetime | None = None
-        self._energy_today_last_date: str | None = None
-
     @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device info to group entities into one device."""
+    def available(self) -> bool:
+        """Return whether the entity is available."""
+        if not super().available:
+            return False
+
         data = self.coordinator.data or {}
-        serial = data.get("DevSN") or data.get("wifiSN") or self._entry.entry_id
-        basic = data.get("_basic") or {}
-        sw_version = basic.get("version")
-
-        host = self._entry.data.get(CONF_HOST)
-        serial_display = f"{serial} ({host})" if host else serial
-
-        model = "Felicity Inverter"
-        if basic.get("Type") is not None and basic.get("SubType") is not None:
-            model = f"Felicity Inverter Type {basic.get('Type')} SubType {basic.get('SubType')}"
-
-        return {
-            "identifiers": {(DOMAIN, serial)},
-            "name": self._entry.data.get("name", "Felicity Inverter"),
-            "manufacturer": "Felicity",
-            "model": model,
-            "sw_version": sw_version,
-            "serial_number": serial_display,
-        }
+        key = self.entity_description.key
+        if key == "raw_json_payload":
+            return bool(data.get("_raw_payloads"))
+        return key in data and data.get(key) is not None
 
     @property
     def native_value(self) -> Any:
-        data: dict = self.coordinator.data or {}
-        key = self.entity_description.key
-
-        def get_nested(
-            path: tuple[Any, ...],
-            default: Any = None,
-            *,
-            scale: float | None = None,
-            digits: int | None = None,
-        ):
-            """Safely read nested path from coordinator data."""
-            cur: Any = data
-            try:
-                for p in path:
-                    cur = cur[p]
-            except (KeyError, IndexError, TypeError):
-                return default
-
-            if scale is not None and isinstance(cur, (int, float)):
-                cur = cur * scale
-            if digits is not None and isinstance(cur, (int, float)):
-                cur = round(cur, digits)
-            return cur
-
-        def trunc_decimals(value: float, digits: int) -> float:
-            """Truncate (not round) a float to a fixed number of decimals."""
-            factor = 10 ** digits
-            return math.trunc(value * factor) / factor
-
-        if key == "battery_soc":
-            raw = get_nested(("Batsoc", 0, 0))
-            return round(raw / 100.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "battery_voltage":
-            raw = get_nested(("Batt", 0, 0))
-            return round(raw / 1000.0, 2) if isinstance(raw, (int, float)) else None
-
-        if key == "load_percent":
-            raw = data.get("lPerc")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "power_flow":
-            raw = data.get("pFlow")
-            return raw if isinstance(raw, (int, float)) else None
-
-        if key == "ac_in_voltage":
-            raw = get_nested(("ACin", 0, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_in_current":
-            raw = get_nested(("ACin", 1, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_in_frequency":
-            raw = get_nested(("ACin", 2, 0))
-            return round(raw / 100.0, 2) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_in_power":
-            raw = get_nested(("ACin", 3, 0))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_in_apparent_power":
-            raw = get_nested(("ACin", 3, 1))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_out_voltage":
-            raw = get_nested(("ACout", 0, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_out_current":
-            raw = get_nested(("ACout", 1, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_out_frequency":
-            raw = get_nested(("ACout", 2, 0))
-            return round(raw / 100.0, 2) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_out_power":
-            raw = get_nested(("ACout", 3, 0))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_out_apparent_power":
-            raw = get_nested(("ACout", 3, 1))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
-
-        if key == "ac_out_reactive_power":
-            raw = get_nested(("ACout", 3, 2))
-            return round(raw, 0) if isinstance(raw, (int, float)) else None
-
-        def _pv_is_aggregated() -> bool:
-            """Detect aggregated PV layout used by some firmwares."""
-            v0 = get_nested(("PV", 0, 0))
-            if not (isinstance(v0, (int, float)) and v0 > 500):
-                return False
-
-            i0 = get_nested(("PV", 0, 1))
-            p0 = get_nested(("PV", 0, 2))
-            if isinstance(i0, (int, float)) and i0 != 0:
-                return False
-            if isinstance(p0, (int, float)) and p0 != 0:
-                return False
-
-            v1 = get_nested(("PV", 1, 0))
-            p2 = get_nested(("PV", 2, 0))
-            pt = get_nested(("PV", 3, 0))
-
-            current_like = isinstance(v1, (int, float)) and 0 < v1 < 300
-            power_like = (
-                isinstance(pt, (int, float))
-                and isinstance(p2, (int, float))
-                and pt >= 0
-                and p2 >= 0
-                and abs(pt - p2) <= max(5.0, 0.05 * max(pt, 1.0))
-                and p2 < 20000
-            )
-            return current_like or power_like
-
-        # ---- PV measurements ----
-        if key == "pv1_voltage":
-            raw_v = get_nested(("PV", 0, 0))
-            return round(raw_v / 10.0, 1) if isinstance(raw_v, (int, float)) else None
-
-        if key == "pv1_current":
-            raw_i = get_nested(("PV", 0, 1))
-            if _pv_is_aggregated():
-                raw_i = get_nested(("PV", 1, 0))
-            return round(raw_i / 10.0, 1) if isinstance(raw_i, (int, float)) else None
-
-        if key == "pv1_power":
-            if _pv_is_aggregated():
-                # V = PV[0][0]/10, I = PV[1][0]/10, P = PV[2][0] or PV[3][0]
-                raw_v = get_nested(("PV", 0, 0), default=0)
-                raw_i = get_nested(("PV", 1, 0), default=0)
-                if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
-                    return 0
-
-                p1 = get_nested(("PV", 2, 0))
-                total = get_nested(("PV", 3, 0))
-                if isinstance(p1, (int, float)):
-                    if p1 == 0 and isinstance(total, (int, float)) and total != 0:
-                        return round(total, 0)
-                    return round(p1, 0)
-                return round(total, 0) if isinstance(total, (int, float)) else None
-
-            raw_v = get_nested(("PV", 0, 0), default=0)
-            raw_i = get_nested(("PV", 0, 1), default=0)
-            if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
-                return 0
-
-            p1 = get_nested(("PV", 0, 2))
-            if isinstance(p1, (int, float)) and p1 != 0:
-                return round(p1, 0)
-
-            pv2_v = get_nested(("PV", 1, 0), default=0)
-            pv2_c = get_nested(("PV", 1, 1), default=0)
-            pv2_p = get_nested(("PV", 1, 2), default=0)
-            total = get_nested(("PV", 3, 0))
-
-            if (
-                (not isinstance(pv2_v, (int, float)) or pv2_v == 0)
-                and (not isinstance(pv2_c, (int, float)) or pv2_c == 0)
-                and (not isinstance(pv2_p, (int, float)) or pv2_p == 0)
-                and isinstance(total, (int, float))
-            ):
-                return round(total, 0)
-
-            return round(p1, 0) if isinstance(p1, (int, float)) else (round(total, 0) if isinstance(total, (int, float)) else None)
-
-        if key == "pv2_voltage":
-            if _pv_is_aggregated():
-                return 0.0
-            raw_v = get_nested(("PV", 1, 0))
-            return round(raw_v / 10.0, 1) if isinstance(raw_v, (int, float)) else None
-
-        if key == "pv2_current":
-            if _pv_is_aggregated():
-                return 0.0
-            raw_i = get_nested(("PV", 1, 1))
-            return round(raw_i / 10.0, 1) if isinstance(raw_i, (int, float)) else None
-
-        if key == "pv2_power":
-            if _pv_is_aggregated():
-                return 0.0
-            raw_v = get_nested(("PV", 1, 0), default=0)
-            raw_i = get_nested(("PV", 1, 1), default=0)
-            if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
-                return 0
-            raw_p = get_nested(("PV", 1, 2))
-            return round(raw_p, 0) if isinstance(raw_p, (int, float)) else None
-
-        if key == "pv3_voltage":
-            if _pv_is_aggregated():
-                return 0.0
-            raw_v = get_nested(("PV", 2, 0))
-            return round(raw_v / 10.0, 1) if isinstance(raw_v, (int, float)) else None
-
-        if key == "pv3_current":
-            if _pv_is_aggregated():
-                return 0.0
-            raw_i = get_nested(("PV", 2, 1))
-            return round(raw_i / 10.0, 1) if isinstance(raw_i, (int, float)) else None
-
-        if key == "pv3_power":
-            if _pv_is_aggregated():
-                return 0.0
-            raw_v = get_nested(("PV", 2, 0), default=0)
-            raw_i = get_nested(("PV", 2, 1), default=0)
-            if isinstance(raw_v, (int, float)) and isinstance(raw_i, (int, float)) and raw_v == 0 and raw_i == 0:
-                return 0
-            raw_p = get_nested(("PV", 2, 2))
-            return round(raw_p, 0) if isinstance(raw_p, (int, float)) else None
-
-        if key == "pv_total_power":
-            raw_p = get_nested(("PV", 3, 0))
-            if not isinstance(raw_p, (int, float)):
-                return None
-
-            # If all PV channels show V=0 and I=0, force P=0. Otherwise show inverter value.
-            v1 = get_nested(("PV", 0, 0), default=0)
-            i1 = get_nested(("PV", 0, 1), default=0)
-            v2 = get_nested(("PV", 1, 0), default=0)
-            i2 = get_nested(("PV", 1, 1), default=0)
-            v3 = get_nested(("PV", 2, 0), default=0)
-            i3 = get_nested(("PV", 2, 1), default=0)
-
-            if _pv_is_aggregated():
-                v_all = get_nested(("PV", 0, 0), default=0)
-                i_all = get_nested(("PV", 1, 0), default=0)
-                if isinstance(v_all, (int, float)) and isinstance(i_all, (int, float)) and v_all == 0 and i_all == 0:
-                    return 0
-            else:
-                all_zero = (
-                    isinstance(v1, (int, float)) and isinstance(i1, (int, float))
-                    and isinstance(v2, (int, float)) and isinstance(i2, (int, float))
-                    and isinstance(v3, (int, float)) and isinstance(i3, (int, float))
-                    and v1 == 0 and i1 == 0 and v2 == 0 and i2 == 0 and v3 == 0 and i3 == 0
-                )
-                if all_zero:
-                    return 0
-
-            return round(raw_p, 0)
-
-        # --- Energy counters (Energy[0..7] -> [0,total,day,month,year]) ---
-        energy_map: dict[str, tuple[int, int]] = {
-            "energy_pv_total": (0, 1),
-            "energy_pv_today": (0, 2),
-            "energy_pv_month": (0, 3),
-            "energy_pv_year": (0, 4),
-            "energy_backup_load_total": (1, 1),
-            "energy_backup_load_today": (1, 2),
-            "energy_backup_load_month": (1, 3),
-            "energy_backup_load_year": (1, 4),
-            "energy_grid_import_total": (2, 1),
-            "energy_grid_import_today": (2, 2),
-            "energy_grid_import_month": (2, 3),
-            "energy_grid_import_year": (2, 4),
-            "energy_grid_export_total": (3, 1),
-            "energy_grid_export_today": (3, 2),
-            "energy_grid_export_month": (3, 3),
-            "energy_grid_export_year": (3, 4),
-            "energy_battery_charge_total": (4, 1),
-            "energy_battery_charge_today": (4, 2),
-            "energy_battery_charge_month": (4, 3),
-            "energy_battery_charge_year": (4, 4),
-            "energy_battery_discharge_total": (5, 1),
-            "energy_battery_discharge_today": (5, 2),
-            "energy_battery_discharge_month": (5, 3),
-            "energy_battery_discharge_year": (5, 4),
-            "energy_home_load_total": (6, 1),
-            "energy_home_load_today": (6, 2),
-            "energy_home_load_month": (6, 3),
-            "energy_home_load_year": (6, 4),
-            "energy_total_load_total": (7, 1),
-            "energy_total_load_today": (7, 2),
-            "energy_total_load_month": (7, 3),
-            "energy_total_load_year": (7, 4),
-        }
-
-        if key in energy_map:
-            g, i = energy_map[key]
-            raw = get_nested(("Energy", g, i))
-            if not isinstance(raw, (int, float)):
-                return None
-
-            kwh = trunc_decimals(raw / 1000.0, 2)
-
-            # --- Practical compromise: ONLY PV energy today ---
-            if key == "energy_pv_today":
-                date_str = data.get("date")
-
-                # prevent double-processing the same payload
-                if (
-                    date_str
-                    and date_str == self._energy_today_last_date
-                    and self._energy_today_last_kwh is not None
-                ):
-                    return self._energy_today_last_kwh
-
-                ts: datetime | None = None
-                if isinstance(date_str, str) and len(date_str) >= 14:
-                    try:
-                        ts = datetime.strptime(date_str[:14], "%Y%m%d%H%M%S")
-                    except Exception:
-                        ts = None
-
-                # If day changed -> accept (including reset to 0)
-                if (
-                    self._energy_today_last_ts is not None
-                    and ts is not None
-                    and ts.date() != self._energy_today_last_ts.date()
-                ):
-                    self._energy_today_last_kwh = kwh
-                    self._energy_today_last_ts = ts
-                    self._energy_today_last_date = date_str
-                    return kwh
-
-                # If "no generation" (PV total power ~0), forbid *any* upward jump.
-                pv_total_power_w = get_nested(("PV", 3, 0))
-                no_gen = isinstance(pv_total_power_w, (int, float)) and pv_total_power_w <= 5.0
-
-                if no_gen and self._energy_today_last_kwh is not None and kwh > self._energy_today_last_kwh:
-                    # hold previous; still advance timestamp/date to avoid repeated processing
-                    if ts is not None:
-                        self._energy_today_last_ts = ts
-                    self._energy_today_last_date = date_str
-                    return self._energy_today_last_kwh
-
-                # accept
-                if ts is not None:
-                    self._energy_today_last_ts = ts
-                self._energy_today_last_kwh = kwh
-                self._energy_today_last_date = date_str
-                return kwh
-
-            # --- Other *_today: keep old conservative jump filter ---
-            if key.endswith("_today"):
-                date_str = data.get("date")
-
-                if (
-                    date_str
-                    and date_str == self._energy_today_last_date
-                    and self._energy_today_last_kwh is not None
-                ):
-                    return self._energy_today_last_kwh
-
-                ts = None
-                if isinstance(date_str, str) and len(date_str) >= 14:
-                    try:
-                        ts = datetime.strptime(date_str[:14], "%Y%m%d%H%M%S")
-                    except Exception:
-                        ts = None
-
-                if (
-                    self._energy_today_last_kwh is not None
-                    and self._energy_today_last_ts is not None
-                    and ts is not None
-                ):
-                    dt = (ts - self._energy_today_last_ts).total_seconds()
-                    if dt < 0:
-                        dt = 0
-
-                    max_kw = 20.0
-                    allowed_jump = (max_kw * (dt / 3600.0)) + 0.5
-
-                    if (kwh - self._energy_today_last_kwh) > allowed_jump:
-                        self._energy_today_last_ts = ts
-                        self._energy_today_last_date = date_str
-                        return self._energy_today_last_kwh
-
-                if ts is not None:
-                    self._energy_today_last_ts = ts
-                self._energy_today_last_kwh = kwh
-                self._energy_today_last_date = date_str
-                return kwh
-
-            return kwh
-
-        # --- Temperatures ---
-        if key == "temp_1":
-            raw = get_nested(("Temp", 0, 0))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "temp_2":
-            raw = get_nested(("Temp", 0, 2))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "temp_3":
-            raw = get_nested(("Temp", 0, 3))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "temp_4":
-            raw = get_nested(("Temp", 0, 4))
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        # --- Diagnostics / codes ---
-        if key == "work_mode":
-            return data.get("workM")
-
-        if key == "warning_code":
-            return data.get("warn")
-
-        if key == "fault_code":
-            return data.get("fault")
-
-        if key == "firmware_version":
-            basic = data.get("_basic") or {}
-            return basic.get("version")
-
-        if key == "last_update_raw":
-            return data.get("date")
-
-        if key == "warning_flags_raw":
-            return data.get("wan2F")
-
-        if key == "warning_flags2_raw":
-            return data.get("wan3F")
-
-        if key == "parallel_status":
-            return data.get("ParStu")
-
-        if key == "telemetry_raw":
-            return data.get("date") or "ok"
-
-        # --- Settings (dev set infor) ---
-        settings = data.get("_settings") or {}
-
-        if key == "settings_summary":
-            return len(settings) if isinstance(settings, dict) and settings else None
-
-        def sget(name: str):
-            try:
-                return settings.get(name)
-            except Exception:
-                return None
-
-        if key == "set_operating_mode":
-            return sget("OperM")
-
-        if key == "set_ac_nominal_voltage":
-            raw = sget("Aorvol")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_grid_over_voltage":
-            raw = sget("FGOV")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_grid_under_voltage":
-            raw = sget("FGUV")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_grid_over_frequency":
-            raw = sget("FGOFq")
-            return round(raw / 100.0, 2) if isinstance(raw, (int, float)) else None
-
-        if key == "set_grid_under_frequency":
-            raw = sget("FGUF")
-            return round(raw / 100.0, 2) if isinstance(raw, (int, float)) else None
-
-        if key == "set_stand":
-            return sget("Stand")
-
-        if key == "set_ac_nominal_frequency_raw":
-            return sget("Aorfre")
-
-        if key == "set_grid_over_voltage_time_raw":
-            return sget("FGOVT")
-
-        if key == "set_grid_under_voltage_time_raw":
-            return sget("FGUVT")
-
-        if key == "set_grid_over_frequency_time_raw":
-            return sget("FGOFqT")
-
-        if key == "set_grid_under_frequency_time_raw":
-            return sget("FGUFT")
-
-        if key == "set_grid_over_voltage_10min":
-            raw = sget("tenGOV")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_secondary_grid_over_voltage":
-            raw = sget("sGOV")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_secondary_grid_under_voltage":
-            raw = sget("sGUV")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_generator_cooldown_time_raw":
-            return sget("GCWT")
-
-        if key == "set_generator_pv_start_delay_raw":
-            return sget("GPSl")
-
-        if key == "set_battery_cv_over_grid":
-            raw = sget("BCVOG")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_battery_cv_float_grid":
-            raw = sget("BCVFG")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_battery_rv_over_grid":
-            raw = sget("BRVOG")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_battery_bddog_raw":
-            return sget("BDDOG")
-
-        if key == "set_battery_bddfg_raw":
-            return sget("BDDFG")
-
-        if key == "set_battery_brdfg_raw":
-            return sget("BRDFG")
-
-        if key == "set_battery_type":
-            return sget("batTy")
-
-        if key == "set_battery_count":
-            return sget("BNum")
-
-        if key == "set_battery_charge_voltage":
-            raw = sget("BChgV")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_battery_float_voltage":
-            raw = sget("BFChV")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_battery_max_charge_current":
-            raw = sget("BMChC")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_battery_max_discharge_current":
-            raw = sget("BMDCu")
-            return round(raw / 10.0, 1) if isinstance(raw, (int, float)) else None
-
-        if key == "set_zero_export_mode":
-            return sget("ZEMode")
-
-        if key == "set_zero_export_power":
-            return sget("ZeroEP")
-
-        if key == "set_buzzer_enabled":
-            return sget("buzEn")
-
-        return None
+        """Return the current normalized sensor value."""
+        return (self.coordinator.data or {}).get(self.entity_description.key)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Expose some raw blocks as attributes for diagnostics."""
+        """Expose diagnostic attributes for the raw payload entity."""
         data = self.coordinator.data or {}
-        key = self.entity_description.key
+        if self.entity_description.key != "raw_json_payload":
+            return None
 
-        if key in (
-            "work_mode",
-            "warning_code",
-            "fault_code",
-            "warning_flags_raw",
-            "warning_flags2_raw",
-            "parallel_status",
-            "last_update_raw",
-        ):
-            return {
-                "wan2F": data.get("wan2F"),
-                "wan3F": data.get("wan3F"),
-                "ParStu": data.get("ParStu"),
-                "BMSFlg": data.get("BMSFlg"),
-                "BFlgAll": data.get("BFlgAll"),
-                "date": data.get("date"),
-            }
-
-        if key == "energy_pv_today":
-            # Minimal diagnostics to confirm the "03:00 spike" conditions.
-            pv = data.get("PV") or []
-            en = data.get("Energy") or []
-            raw_today_wh = None
-            raw_total_wh = None
-            try:
-                raw_today_wh = en[0][2]
-            except Exception:
-                raw_today_wh = None
-            try:
-                raw_total_wh = en[0][1]
-            except Exception:
-                raw_total_wh = None
-
-            pv_total_power_w = None
-            pv_v_v = None
-            pv_i_a = None
-
-            try:
-                pv_total_power_w = pv[3][0]
-            except Exception:
-                pv_total_power_w = None
-
-            # voltage raw -> V
-            try:
-                pv_v_v = pv[0][0] / 10.0
-            except Exception:
-                pv_v_v = None
-
-            # current raw -> A (prefer aggregated current if present)
-            try:
-                # if aggregated, pv[1][0] is I*10; otherwise pv[0][1] is I1*10
-                if (
-                    isinstance(pv, list)
-                    and len(pv) >= 2
-                    and isinstance(pv[0], list)
-                    and isinstance(pv[1], list)
-                    and len(pv[0]) >= 2
-                    and len(pv[1]) >= 1
-                    and (pv[0][1] == 0 or pv[0][1] is None)
-                    and isinstance(pv[1][0], (int, float))
-                    and 0 <= pv[1][0] < 300
-                ):
-                    pv_i_a = pv[1][0] / 10.0
-                else:
-                    pv_i_a = pv[0][1] / 10.0
-            except Exception:
-                pv_i_a = None
-
-            return {
-                "date": data.get("date"),
-                "pv_total_power_w": pv_total_power_w,
-                "pv_v_v": pv_v_v,
-                "pv_i_a": pv_i_a,
-                "raw_today_wh": raw_today_wh,
-                "raw_total_wh": raw_total_wh,
-            }
-
-        if key == "telemetry_raw":
-            return {
-                "date": data.get("date"),
-                "workM": data.get("workM"),
-                "warn": data.get("warn"),
-                "fault": data.get("fault"),
-                "wan2F": data.get("wan2F"),
-                "wan3F": data.get("wan3F"),
-                "lPerc": data.get("lPerc"),
-                "pFlow": data.get("pFlow"),
-                "ACin": data.get("ACin"),
-                "ACout": data.get("ACout"),
-                "PV": data.get("PV"),
-                "INV": data.get("INV"),
-                "Energy": data.get("Energy"),
-                "Temp": data.get("Temp"),
-                "Batt": data.get("Batt"),
-                "Batsoc": data.get("Batsoc"),
-            }
-
-        if key == "settings_summary":
-            settings = data.get("_settings") or {}
-            packs = data.get("_settings_packs") or []
-            return {
-                "pack_count": len(packs) if isinstance(packs, list) else None,
-                "ttlPack": settings.get("ttlPack") if isinstance(settings, dict) else None,
-                "last_index": settings.get("index") if isinstance(settings, dict) else None,
-                "settings": settings,
-            }
-
-        return None
+        return {
+            "last_update": data.get("last_update"),
+            "raw_payloads": data.get("_raw_payloads"),
+            "raw_objects": data.get("_raw_objects"),
+            "raw_inverter": data.get("_raw_inverter"),
+            "raw_bms": data.get("_raw_bms"),
+            "raw_settings": data.get("_raw_settings"),
+            "raw_energy_counters": data.get("_raw_energy_counters"),
+            "ac_layouts": data.get("_ac_layouts"),
+        }
