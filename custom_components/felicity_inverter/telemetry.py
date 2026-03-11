@@ -6,44 +6,44 @@ from .api import RawPollData, merge_json_objects
 from .protocol import BMS_TYPE, INVERTER_TYPE
 
 MODE_MAP: dict[int, str] = {
-    0: "standby",
-    1: "line",
-    2: "battery",
-    3: "hybrid",
-    4: "bypass",
+    0: "Standby",
+    1: "Line",
+    2: "Battery",
+    3: "Hybrid",
+    4: "Bypass",
 }
 
 BATTERY_CHARGE_STATUS_MAP: dict[int, str] = {
-    0: "idle_or_discharge",
-    1: "charge",
+    0: "Idle or Discharging",
+    1: "Charging",
 }
 
 WIFI_STATUS_MAP: dict[int, str] = {
-    2: "cloud_connected",
+    2: "Cloud Connected",
 }
 
 BMS_COMMUNICATION_STATUS_MAP: dict[int, str] = {
-    1: "active",
+    1: "Active",
 }
 
 BMS_REGISTRATION_STATUS_MAP: dict[int, str] = {
-    1: "registered",
+    1: "Registered",
 }
 
 BMS_GLOBAL_STATUS_MAP: dict[int, str] = {
-    3: "synchronized",
+    3: "Synchronized",
 }
 
 CHARGE_SOURCE_PRIORITY_MAP: dict[int, str] = {
-    3: "solar_first",
+    3: "Solar First",
 }
 
 SMART_PORT_STATUS_MAP: dict[int, str] = {
-    0: "off_or_standby",
+    0: "Off or Standby",
 }
 
 SYSTEM_POWER_STATUS_MAP: dict[int, str] = {
-    0: "normal",
+    0: "Normal",
 }
 
 
@@ -152,6 +152,8 @@ def normalize_telemetry(
 
     pv_power = _positive_value(pv_metrics["total_power"])
     load_power = _positive_value(load_metrics["power"])
+    smart_load_power = _positive_value(smart_load_metrics["power"])
+    generator_power = _positive_value(generator_metrics["power"])
     battery_charge = _positive_value(battery_charge_power)
     battery_discharge = _positive_value(battery_discharge_power)
 
@@ -159,7 +161,10 @@ def normalize_telemetry(
     pv_to_battery = 0.0
     if battery_charge > 0:
         pv_to_battery = _clamp_non_negative(min(max(pv_power - pv_to_load, 0.0), battery_charge))
-    pv_to_grid = _clamp_non_negative(max(pv_power - pv_to_load - pv_to_battery, 0.0))
+    inferred_pv_to_grid = _clamp_non_negative(max(pv_power - pv_to_load - pv_to_battery, 0.0))
+    pv_to_grid = inferred_pv_to_grid
+    if grid_export_power is not None:
+        pv_to_grid = _clamp_non_negative(min(float(grid_export_power), pv_power))
 
     load_remaining = _clamp_non_negative(load_power - pv_to_load)
     battery_to_load = _clamp_non_negative(min(battery_discharge, load_remaining))
@@ -168,9 +173,23 @@ def normalize_telemetry(
     self_consumption_percent = 0.0
     if pv_power > 0:
         self_consumption_percent = _round_number(
-            ((pv_to_load + pv_to_battery) / pv_power) * 100.0,
+            ((pv_power - pv_to_grid) / pv_power) * 100.0,
             1,
         )
+
+    self_consumption_power = _round_number(
+        _clamp_non_negative(
+            pv_power
+            + _positive_value(grid_import_power)
+            + battery_discharge
+            + generator_power
+            - load_power
+            - smart_load_power
+            - battery_charge
+            - _positive_value(grid_export_power)
+        ),
+        0,
+    )
 
     battery_roundtrip_efficiency = 0.0
     if battery_charge > 0:
@@ -262,6 +281,7 @@ def normalize_telemetry(
         "pv_to_grid_power": _round_number(pv_to_grid, 0),
         "battery_to_load_power": _round_number(battery_to_load, 0),
         "grid_to_load_power": _round_number(grid_to_load, 0),
+        "self_consumption_power": self_consumption_power,
         "self_consumption_percent": self_consumption_percent,
         "battery_roundtrip_efficiency": battery_roundtrip_efficiency,
         **energy_metrics,

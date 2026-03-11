@@ -561,6 +561,14 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
         icon="mdi:transmission-tower",
     ),
     FelicitySensorDescription(
+        key="self_consumption_power",
+        name="Self Consumption Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash",
+    ),
+    FelicitySensorDescription(
         key="self_consumption_percent",
         name="Self Consumption",
         native_unit_of_measurement=PERCENTAGE,

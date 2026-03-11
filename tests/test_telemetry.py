@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+from typing import TYPE_CHECKING, Any
 import unittest
 
 HOMEASSISTANT_AVAILABLE = importlib.util.find_spec("homeassistant") is not None
+
+if TYPE_CHECKING:
+    from custom_components.felicity_inverter.api import ParsedResponse, RawPollData
 
 if HOMEASSISTANT_AVAILABLE:
     from custom_components.felicity_inverter.api import ParsedResponse, RawPollData
@@ -12,7 +16,7 @@ else:  # pragma: no cover - environment dependent
     ParsedResponse = RawPollData = normalize_telemetry = None
 
 
-def _sample_poll_data() -> RawPollData:
+def _sample_poll_data() -> Any:
     real_objects = [
         {
             "CommVer": 1,
@@ -146,6 +150,7 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["pv_to_battery_power"], 783)
         self.assertEqual(data["pv_to_grid_power"], 213)
         self.assertEqual(data["battery_to_load_power"], 0)
+        self.assertEqual(data["self_consumption_power"], 213)
         self.assertEqual(data["power_flow_status_raw"], 62689)
         self.assertEqual(data["pv_yield_energy_total"], 1.536)
         self.assertEqual(data["pv_yield_energy_daily"], 1.536)
@@ -245,12 +250,90 @@ class TelemetryNormalizationTests(unittest.TestCase):
 
         self.assertEqual(data["pv_to_load_power"], 500)
         self.assertEqual(data["pv_to_battery_power"], 300)
-        self.assertEqual(data["pv_to_grid_power"], 200)
+        self.assertEqual(data["pv_to_grid_power"], 0)
         self.assertEqual(data["battery_to_load_power"], 0)
         self.assertEqual(data["grid_to_load_power"], 0)
-        self.assertEqual(data["self_consumption_percent"], 80.0)
+        self.assertEqual(data["self_consumption_power"], 200)
+        self.assertEqual(data["self_consumption_percent"], 100.0)
         self.assertEqual(data["battery_charge_power"], 300)
         self.assertEqual(data["battery_discharge_power"], 0)
+
+    @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
+    def test_normalize_telemetry_uses_measured_grid_export_for_self_consumption(self) -> None:
+        poll_data = RawPollData(
+            responses={
+                "real": ParsedResponse(
+                    command="real",
+                    raw="real",
+                    objects=[
+                        {
+                            "DevSN": "INV-4",
+                            "Type": 80,
+                            "SubType": 1035,
+                            "workM": 3,
+                            "PV": [[1800, 0, 0], [100, 0, 0], [1000, 0, 0], [0]],
+                            "ACin": [[2300], [0], [5000], [-200, 0], [0]],
+                            "ACout": [[2300], [20], [500], [0, 0], [0]],
+                            "Batt": [[52000], [50], [300, 0]],
+                            "Batsoc": [[7000, 0, 0]],
+                        }
+                    ],
+                ),
+                "basic": ParsedResponse(
+                    command="basic",
+                    raw="basic",
+                    objects=[{"DevSN": "INV-4", "Type": 80, "version": "2.20"}],
+                ),
+                "set": ParsedResponse(command="set", raw="set", objects=[]),
+            }
+        )
+
+        data = normalize_telemetry(poll_data)
+
+        self.assertEqual(data["grid_export_power"], 200)
+        self.assertEqual(data["pv_to_grid_power"], 200)
+        self.assertEqual(data["self_consumption_power"], 0)
+        self.assertEqual(data["self_consumption_percent"], 80.0)
+
+    @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
+    def test_normalize_telemetry_calculates_night_self_consumption_power(self) -> None:
+        poll_data = RawPollData(
+            responses={
+                "real": ParsedResponse(
+                    command="real",
+                    raw="real",
+                    objects=[
+                        {
+                            "DevSN": "INV-5",
+                            "Type": 80,
+                            "SubType": 1035,
+                            "workM": 2,
+                            "PV": [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0]],
+                            "ACin": [[2300], [0], [5000], [0, 0], [0]],
+                            "ACout": [[2300], [0], [5000], [0, 0], [0]],
+                            "SmartL": [[0], [0], [0], [0, 0], [0]],
+                            "GEN": [[0], [0], [0], [0, 0], [0]],
+                            "Batt": [[52000], [50], [-120, 0]],
+                            "Batsoc": [[7000, 0, 0]],
+                        }
+                    ],
+                ),
+                "basic": ParsedResponse(
+                    command="basic",
+                    raw="basic",
+                    objects=[{"DevSN": "INV-5", "Type": 80, "version": "2.20"}],
+                ),
+                "set": ParsedResponse(command="set", raw="set", objects=[]),
+            }
+        )
+
+        data = normalize_telemetry(poll_data)
+
+        self.assertEqual(data["pv_power"], 0)
+        self.assertEqual(data["load_power"], 0)
+        self.assertEqual(data["battery_discharge_power"], 120)
+        self.assertEqual(data["self_consumption_power"], 120)
+        self.assertEqual(data["self_consumption_percent"], 0.0)
 
     @unittest.skipUnless(HOMEASSISTANT_AVAILABLE, "homeassistant not installed")
     def test_normalize_telemetry_supports_per_string_pv_layout(self) -> None:
