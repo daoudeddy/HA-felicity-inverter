@@ -287,6 +287,53 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["_power_methods"]["grid_power"], "IVEM6048_V1/IVEM_V1 -> ACin[4][1]")
         self.assertEqual(data["_power_methods"]["battery_power"], "Batt[2][0]")
 
+    def test_normalize_telemetry_ignores_battery_discharge_in_work_mode_5_grid_fallback(self) -> None:
+        poll_data = RawPollData(
+            responses={
+                "real": ParsedResponse(
+                    command="real",
+                    raw="real",
+                    objects=[
+                        {
+                            "DevSN": "INV-BYPASS-1",
+                            "Type": 80,
+                            "SubType": 1035,
+                            "workM": 5,
+                            "ACin": [[2299, None, None], [0, None, None], [4831, None, None], [0, 0], [0, None, None]],
+                            "ACout": [[2299, None, None], [19, None, None], [4831, None, None], [414, 436, 0], [414, None, None]],
+                            "PV": [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0]],
+                            "Batt": [[52500], [-20], [-110, 0]],
+                            "Batsoc": [[4200, 0, 0]],
+                        }
+                    ],
+                ),
+                "basic": ParsedResponse(
+                    command="basic",
+                    raw="basic",
+                    objects=[
+                        {
+                            "DevSN": "INV-BYPASS-1",
+                            "Type": 80,
+                            "SubType": 1035,
+                            "version": "2.20",
+                        }
+                    ],
+                ),
+                "set": ParsedResponse(command="set", raw="set", objects=[]),
+            }
+        )
+
+        data = normalize_telemetry(poll_data)
+
+        self.assertEqual(data["battery_power"], -110)
+        self.assertEqual(data["battery_discharge_power"], 110)
+        self.assertEqual(data["pv_total_power"], 0)
+        self.assertEqual(data["load_power"], 414)
+        self.assertEqual(data["grid_power"], 414)
+        self.assertEqual(data["grid_import_power"], 414)
+        self.assertEqual(data["grid_export_power"], 0)
+        self.assertEqual(data["_power_methods"]["grid_power"], "IVEM workM=5 fallback -> load + max(battery, 0) - pv")
+
     def test_normalize_telemetry_supports_per_string_pv_layout(self) -> None:
         poll_data = RawPollData(
             responses={

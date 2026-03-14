@@ -670,9 +670,15 @@ def _ac_total_in_inv_power(
             (_is_device_ivem4024_v1(type_id, subtype_id) or _is_device_ivem_v1(type_id, subtype_id) or _is_device_ivem6048_v1(type_id, subtype_id))
             and generator_present
         ):
-            fallback = load_power + battery_power - pv_total_power
+            fallback_battery_power = battery_power
+            fallback_branch = "IVEM fallback -> load + battery - pv"
+            if work_mode == 5:
+                fallback_battery_power = max(battery_power, 0.0)
+                fallback_branch = "IVEM workM=5 fallback -> load + max(battery, 0) - pv"
+
+            fallback = load_power + fallback_battery_power - pv_total_power
             if fallback >= 50:
-                return fallback, "IVEM fallback -> load + battery - pv"
+                return fallback, fallback_branch
 
     return value, branch
 
