@@ -2,6 +2,8 @@
 
 Custom Home Assistant integration for Felicity inverter WiFi telemetry over the local TCP interface on port `53970`.
 
+This fork is aimed at making the decoder easier to understand and easier to verify against the decompiled app. The integration remains usable in Home Assistant, but reverse-engineered decoding correctness is the primary goal of the project.
+
 The integration polls these commands:
 
 - `wifilocalMonitor:get dev real infor`
@@ -16,13 +18,20 @@ The inverter may return multiple JSON objects concatenated together with no sepa
 - Default polling interval: **5 seconds**
 - TCP polling with automatic retry on the next cycle if a request fails
 - Clean normalized telemetry for Home Assistant sensors
+- Decoder structure that separates transport, normalization, and reverse-engineered mapping rules
 - CSV-aligned runtime mapping for inverter and BMS payloads
-- Power-flow sensors for dashboards and automations
 - Energy Dashboard compatible power sensors
-- PV string sensors and expanded AC-side metrics
+- Source-backed aggregate power decoding ported from the app's `TimeDataConnEntity`
+- PV string sensors and AC-side layout diagnostics kept separate from source-backed totals
 - BMS summary and limit diagnostics
-- Diagnostic device metadata sensors
+- BMS voltage-extrema diagnostics with explicit cell index values
+- Diagnostic device metadata and raw status-code sensors
 - Optional raw JSON diagnostic sensor disabled by default
+
+## Decoder Docs
+
+- [Architecture](docs/architecture.md)
+- [Decoding Notes](docs/decoding.md)
 
 ## Installation
 
@@ -57,6 +66,7 @@ The integration exposes normalized sensors in these groups:
   - SOC, voltage, current, signed power
   - charge / discharge power
   - charge / discharge current
+  - charge stage
   - battery temperature
 - **PV**
   - total voltage, current, power
@@ -74,16 +84,13 @@ The integration exposes normalized sensors in these groups:
 - **Smart Load**
   - voltage, current, frequency
   - active power, apparent power, total power
-- **Energy Flow**
-  - PV → Load
-  - PV → Battery
-  - PV → Grid
-  - Battery → Load
-  - Grid → Load
-  - self consumption
-  - battery roundtrip efficiency
+- **Persistent Derived Energy**
+  - grid import / export total energy
+  - battery charge / discharge total energy
+  - generator total energy
+  - smart-load total energy
 - **System**
-  - inverter mode
+  - inverter mode raw
   - bus voltage
   - bus negative voltage
   - load percent
@@ -96,8 +103,6 @@ The integration exposes normalized sensors in these groups:
 - **Diagnostic Energy Counters**
   - daily / monthly / yearly / total PV yield
   - daily / monthly / yearly / total load consumption
-  - daily / monthly / yearly / total grid import / export
-  - daily / monthly / yearly / total battery charge / discharge
 - **Warnings / Faults**
   - warning code
   - fault code
@@ -107,14 +112,16 @@ The integration exposes normalized sensors in these groups:
   - pack voltage, current, SOC, SOH, capacity
   - charge / discharge voltage limits
   - charge / discharge current limits
-  - max / min cell voltage and temperature summary values
-  - communication, registration, and global status values
+  - max / min cell voltage and max / min cell index summary values
+  - communication, registration, and global status raw values
 - **Diagnostics**
   - device serial
   - WiFi serial
+  - decoder profile
   - firmware version
   - device software version
   - device hardware version
+  - raw inverter and status codes where app labels have not been recovered yet
   - raw JSON payload sensor (disabled by default)
 
 ## Energy Dashboard
@@ -128,9 +135,16 @@ This integration exposes real-time power sensors for:
 - `battery_charge_power`
 - `battery_discharge_power`
 
-Use Home Assistant statistics/helpers to derive energy from those power sensors. The integration does **not** manually integrate energy in software.
+The integration also exposes persistent derived total-energy sensors for grid import/export, battery charge/discharge, generator, and smart-load energy. Those totals are accumulated locally from the source-backed power sensors and persisted across Home Assistant restarts.
 
-The inverter `Energy[][]` counters are exposed as diagnostic sensors for reference, including PV yield, load consumption, grid import/export, and battery charge/discharge totals.
+Where native inverter counters are trustworthy, the integration prefers them. Where they are not yet proven, persistent energy is derived from source-backed decoded power sensors rather than raw voltage and current values.
+
+That means the likely persistent-energy split is:
+
+- native counters for PV yield and load consumption
+- integration-managed persistent totals for grid import/export, battery charge/discharge, generator, and smart-load energy until direct native counters are proven
+
+The inverter `Energy[][]` counters are exposed conservatively. Stable diagnostic counters currently cover only PV yield and load consumption. Candidate mappings for grid export and battery charge / discharge remain available in `energy_decoder_status.inferred_rows`, and unverified rows remain available in raw diagnostics instead of being exported as stable sensor families.
 
 `pFlow` is treated as a raw UI power-flow status bitmask, not as an energy counter.
 
@@ -146,5 +160,14 @@ logger:
 ## Notes
 
 - If TCP communication fails, entities become unavailable until the next successful poll.
-- The integration supports multiple AC payload layouts and automatically normalizes them into one sensor model.
+- Aggregate PV, grid, load, generator, and smart-load power now follow the subtype-aware branches recovered from `TimeDataConnEntity`.
+- Battery voltage and current prefer the BMS `BattList` values when a BMS packet is present, and battery power follows `SocDataRootEntity.batteryPower()` using those BMS values. Inverter-side EMS power remains the fallback when no BMS packet is available.
+- `bCStat` charge stages are now exposed directly as `battery_charge_stage`, while the existing battery charge status still prefers live BMS charging state when that state is present.
+- App-side packet handling is now known to use serial-keyed cache composition plus multipart `ttlPack/index` tracking; the integration mirrors the serial-key merge behavior even though the app's internal cache buckets do not map one-to-one to the repo's `real` / `basic` / `set` abstraction.
+- Decoder profile diagnostics now expose the broader type/subtype families proven in `ProductPackageDetail` instead of only a single hard-coded profile.
+- Persistent derived energy totals use trapezoidal integration over the source-backed power sensors and discard oversized sampling gaps so reconnects or outages do not backfill unobserved energy.
+- Some per-channel PV and AC voltage/current/frequency sensors still rely on observed matrix layouts because the direct raw-to-field mapper for those flattened DTO fields has not yet been recovered.
+- Estimated power-flow breakdown sensors were removed rather than kept as if they were source-backed.
+- No broader app-side label builder was recovered beyond `bCStat`; other user-facing status fields remain raw numeric codes until matching source-backed label logic is found.
+- Some inverter `Energy[][]` counters are still conservative or provisional until the raw row semantics are proven directly in the decompiled sources.
 - The raw JSON sensor is diagnostic only and disabled by default to avoid unnecessary state growth.

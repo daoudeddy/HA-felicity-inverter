@@ -9,12 +9,13 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .entity import FelicityCoordinatorEntity
+from .entity_support import binary_sensor_key_is_supported
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -47,6 +48,18 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[FelicityBinarySensorDescription, ...] = (
         device_class=BinarySensorDeviceClass.POWER,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    FelicityBinarySensorDescription(
+        key="bms_active",
+        name="BMS Active",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-check",
+    ),
+    FelicityBinarySensorDescription(
+        key="bms_charging",
+        name="BMS Charging",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-charging",
+    ),
 )
 
 
@@ -59,12 +72,30 @@ async def async_setup_entry(
     runtime = hass.data[DOMAIN][entry.entry_id]
     coordinator = runtime.coordinator
 
-    async_add_entities(
-        [
+    added_keys: set[str] = set()
+
+    def _new_binary_sensor_entities() -> list[FelicityBinarySensor]:
+        data = coordinator.data or {}
+        entities = [
             FelicityBinarySensor(coordinator, entry, description)
             for description in BINARY_SENSOR_DESCRIPTIONS
+            if description.key not in added_keys
+            and binary_sensor_key_is_supported(description.key, data)
         ]
-    )
+        added_keys.update(entity.entity_description.key for entity in entities)
+        return entities
+
+    initial_entities = _new_binary_sensor_entities()
+    if initial_entities:
+        async_add_entities(initial_entities)
+
+    @callback
+    def _handle_coordinator_update() -> None:
+        new_entities = _new_binary_sensor_entities()
+        if new_entities:
+            async_add_entities(new_entities)
+
+    entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
 
 
 class FelicityBinarySensor(FelicityCoordinatorEntity, BinarySensorEntity):
@@ -96,6 +127,10 @@ class FelicityBinarySensor(FelicityCoordinatorEntity, BinarySensorEntity):
             return data.get("grid_voltage") is not None
         if key == "battery_present":
             return data.get("battery_voltage") is not None
+        if key == "bms_active":
+            return data.get("bms_is_active") is not None
+        if key == "bms_charging":
+            return data.get("bms_is_charging") is not None
         return False
 
     @property
@@ -119,5 +154,11 @@ class FelicityBinarySensor(FelicityCoordinatorEntity, BinarySensorEntity):
         if key == "battery_present":
             value = data.get("battery_voltage")
             return None if value is None else float(value) > 10.0
+
+        if key == "bms_active":
+            return data.get("bms_is_active")
+
+        if key == "bms_charging":
+            return data.get("bms_is_charging")
 
         return None

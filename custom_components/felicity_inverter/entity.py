@@ -19,7 +19,10 @@ def build_device_info(entry: ConfigEntry, data: dict[str, Any]) -> DeviceInfo:
     device_type = data.get("device_type")
     device_subtype = data.get("device_subtype")
     model = "Felicity Inverter"
-    if device_type is not None and device_subtype is not None:
+    profile_label = data.get("decoder_profile_label")
+    if isinstance(profile_label, str) and profile_label and profile_label != "Generic":
+        model = f"Felicity Inverter {profile_label}"
+    elif device_type is not None and device_subtype is not None:
         model = f"Felicity Inverter Type {device_type} SubType {device_subtype}"
 
     return DeviceInfo(

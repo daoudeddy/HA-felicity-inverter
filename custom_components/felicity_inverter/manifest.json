@@ -1,7 +1,7 @@
 {
   "domain": "felicity_inverter",
   "name": "Felicity Inverter",
-  "description": "Home Assistant custom integration for Felicity inverter WiFi telemetry over local TCP polling.",
+  "description": "Home Assistant custom integration for Felicity inverter local TCP telemetry with reverse-engineered decoding.",
   "version": "0.2.3",
   "documentation": "https://github.com/vitalik33-tir/HA-felicity-inverter",
   "requirements": [],

@@ -114,6 +114,7 @@ def split_json_objects(raw: str) -> list[dict[str, Any]]:
     """Split concatenated JSON objects using brace depth and parse them."""
     normalized = _normalize_payload(raw)
     objects: list[dict[str, Any]] = []
+    first_device_serial: str | None = None
     block: list[str] = []
     depth = 0
     in_string = False
@@ -148,7 +149,11 @@ def split_json_objects(raw: str) -> list[dict[str, Any]]:
                     _LOGGER.debug("Skipping invalid JSON chunk %r: %s", candidate, err)
                     continue
                 if isinstance(parsed, dict):
-                    objects.append(parsed)
+                    normalized_object, first_device_serial = _normalize_parsed_object(
+                        parsed,
+                        first_device_serial=first_device_serial,
+                    )
+                    objects.append(normalized_object)
 
     return objects
 
@@ -168,3 +173,58 @@ def _normalize_payload(raw: str) -> str:
     normalized = normalized.replace("'", '"')
     normalized = re.sub(r"\bNone\b", "null", normalized)
     return normalized
+
+
+def _normalize_parsed_object(
+    parsed: dict[str, Any],
+    *,
+    first_device_serial: str | None,
+) -> tuple[dict[str, Any], str | None]:
+    """Apply app-observed per-object normalization before decoding."""
+    normalized = dict(parsed)
+
+    device_serial = _text_value(normalized.get("DevSN"))
+    if first_device_serial is None and device_serial is not None:
+        first_device_serial = device_serial
+
+    mod_addr = _text_value(normalized.get("modID")) or _text_value(normalized.get("ModAddr"))
+    if mod_addr is not None:
+        normalized["ModAddr"] = mod_addr
+        normalized["modID"] = mod_addr
+        if device_serial is None:
+            parent_serial = _text_value(normalized.get("InvSN")) or first_device_serial
+            if parent_serial is not None:
+                normalized["DevSN"] = f"{parent_serial}-{mod_addr}"
+
+    if "Energy" not in normalized and "Energy3" in normalized:
+        normalized["Energy"] = normalized["Energy3"]
+
+    if "M1SwVer" in normalized or "M2SwVer" in normalized:
+        for key, value in list(normalized.items()):
+            if str(key).lower().endswith("ver") and _is_version_sentinel(value):
+                normalized[key] = ""
+
+    return normalized, first_device_serial
+
+
+def _text_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _is_version_sentinel(value: Any) -> bool:
+    if isinstance(value, bool) or value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return abs(int(value)) == 65535
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return False
+        try:
+            return abs(int(float(stripped))) == 65535
+        except ValueError:
+            return False
+    return False
