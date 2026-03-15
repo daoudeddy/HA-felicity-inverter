@@ -113,19 +113,27 @@ What is still not fully reduced to a one-to-one proof is the exact correspondenc
 
 ## Enum And Label Status
 
-Only one status-label mapping was recovered directly from the app-side flattened DTOs in this pass:
+Two currently used label maps are now treated as confirmed in the integration, with user-facing labels normalized to clearer English rather than copied literally from app wording:
 
 - `bcStatus` / `bCStat` fallback stages in `DataTimeRealRootEntity.getInverterStatus()`:
-	- `0` = no charge
-	- `1` = bulk charge
-	- `2` = absorption charge
-	- `3` = float charge
+	- `0` = idle
+	- `1` = bulk
+	- `2` = absorption
+	- `3` = float
 
-The integration now exposes that mapping directly as `battery_charge_stage`. The existing `battery_charge_status` sensor still prefers live BMS charging state when `Bstate` is available, because that state is closer to instantaneous direction than the inverter's fallback stage enum.
+- `workM` working mode enum:
+	- `0` = power on
+	- `1` = standby
+	- `2` = bypass
+	- `3` = battery
+	- `4` = fault
+	- `5` = grid
+	- `6` = charging
+
+The integration now exposes those mappings as `battery_charge_stage` and `inverter_mode`. The existing `battery_charge_status` sensor still prefers live BMS charging state when `Bstate` is available, because that state is closer to instantaneous direction than the inverter's fallback stage enum. The raw `inverter_mode_raw` field remains exposed alongside the mapped `inverter_mode` label.
 
 Other local label maps previously exposed by the integration were not recovered from authoritative app-side label builders in this source pass, including:
 
-- inverter mode text
 - WiFi status text
 - BMS communication / registration / global label text
 - charge-source priority label text
@@ -139,6 +147,13 @@ Negative findings from this source pass:
 - `DataTimeRealRootEntity.fieldFormatLabel(...)` is only a null/empty formatter, not a hidden label decoder
 - no separate setter-based mapper into `StorageRealtimeData` was recovered from the accessible source tree
 - `DataTimeRealRootEntity` itself does not appear to be the primary local realtime raw-array mapper
+
+Additional mode-related observations from the decompiled app:
+
+- `DataTimeRealRootEntity.getWorkMode()` returns the stored work mode string directly rather than translating it locally
+- device-time UI code can display a higher-level `workModeStr` when that field is present in JSON
+- `DeviceBaseEntity.canSelfTest()` explicitly allows self-test only when `workMode` is `2` or `5`
+- `TimeDataConnEntity` branches on `workM` values for some families, including `3`, `4`, and `5`, which matches the repo's mode-aware grid-power handling
 
 Additional mapper details recovered from `TimeDataConnEntity`:
 

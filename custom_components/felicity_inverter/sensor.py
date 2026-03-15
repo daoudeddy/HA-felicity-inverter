@@ -228,7 +228,7 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
     ),
     FelicitySensorDescription(
         key="battery_charge_status_raw",
-        name="Battery Charge Status Raw",
+        name="Battery Charge Stage Raw",
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:battery-sync-outline",
     ),
@@ -582,8 +582,14 @@ SENSOR_DESCRIPTIONS: tuple[FelicitySensorDescription, ...] = (
     *PERSISTENT_ENERGY_SENSOR_DESCRIPTIONS,
     *ENERGY_COUNTER_SENSOR_DESCRIPTIONS,
     FelicitySensorDescription(
+        key="inverter_mode",
+        name="Operating Mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:home-switch",
+    ),
+    FelicitySensorDescription(
         key="inverter_mode_raw",
-        name="Inverter Mode Raw",
+        name="Operating Mode Raw",
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:home-switch",
     ),

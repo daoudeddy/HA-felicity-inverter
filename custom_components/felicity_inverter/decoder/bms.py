@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any
 
-from .constants import BATTERY_CHARGE_STATUS_MAP
+from .constants import BATTERY_CHARGE_STAGE_LABELS
 from .helpers import (
     bit_is_set,
     integer,
@@ -25,7 +25,7 @@ def battery_charge_status(inverter: dict[str, Any], bms: dict[str, Any]) -> str 
 
 
 def battery_charge_stage(inverter: dict[str, Any]) -> str | None:
-    return map_enum(inverter.get("bCStat"), BATTERY_CHARGE_STATUS_MAP)
+    return map_enum(inverter.get("bCStat"), BATTERY_CHARGE_STAGE_LABELS)
 
 
 def decode_bms_state_flags(bms: dict[str, Any]) -> dict[str, Any]:

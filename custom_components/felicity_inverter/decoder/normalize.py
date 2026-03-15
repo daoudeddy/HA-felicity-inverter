@@ -9,11 +9,13 @@ from .bms import (
     battery_power_from_bms,
     extract_bms_metrics,
 )
+from .constants import INVERTER_OPERATING_MODE_LABELS
 from .energy import energy_decoder_status, extract_energy_metrics
 from .helpers import (
     coerce_string,
     first_number,
     integer,
+    map_enum,
     nested,
     normalize_temperature,
     number,
@@ -221,6 +223,7 @@ def normalize_telemetry(
         "heatsink_temperature": heatsink_temperature,
         "ambient_temperature": ambient_temperature,
         "inverter_temperature": transformer_temperature,
+        "inverter_mode": map_enum(inverter.get("workM"), INVERTER_OPERATING_MODE_LABELS),
         "inverter_mode_raw": integer(inverter.get("workM")),
         "inverter_warning_code": inverter.get("warn"),
         "inverter_fault_code": inverter.get("fault"),

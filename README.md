@@ -90,6 +90,7 @@ The integration exposes normalized sensors in these groups:
   - generator total energy
   - smart-load total energy
 - **System**
+  - inverter mode
   - inverter mode raw
   - bus voltage
   - bus negative voltage
@@ -162,12 +163,13 @@ logger:
 - If TCP communication fails, entities become unavailable until the next successful poll.
 - Aggregate PV, grid, load, generator, and smart-load power now follow the subtype-aware branches recovered from `TimeDataConnEntity`.
 - Battery voltage and current prefer the BMS `BattList` values when a BMS packet is present, and battery power follows `SocDataRootEntity.batteryPower()` using those BMS values. Inverter-side EMS power remains the fallback when no BMS packet is available.
-- `bCStat` charge stages are now exposed directly as `battery_charge_stage`, while the existing battery charge status still prefers live BMS charging state when that state is present.
+- `bCStat` charge stage is now exposed directly as `battery_charge_stage` using normalized HA-friendly labels `0=Idle`, `1=Bulk`, `2=Absorption`, `3=Float`, while the existing battery charge status still prefers live BMS charging state when that state is present.
+- `workM` now also exposes a labeled `inverter_mode` sensor using normalized operating-mode labels `0=Power On`, `1=Standby`, `2=Bypass`, `3=Battery`, `4=Fault`, `5=Grid`, `6=Charging`. The raw `inverter_mode_raw` code remains available for diagnostics.
 - App-side packet handling is now known to use serial-keyed cache composition plus multipart `ttlPack/index` tracking; the integration mirrors the serial-key merge behavior even though the app's internal cache buckets do not map one-to-one to the repo's `real` / `basic` / `set` abstraction.
 - Decoder profile diagnostics now expose the broader type/subtype families proven in `ProductPackageDetail` instead of only a single hard-coded profile.
 - Persistent derived energy totals use trapezoidal integration over the source-backed power sensors and discard oversized sampling gaps so reconnects or outages do not backfill unobserved energy.
 - Some per-channel PV and AC voltage/current/frequency sensors still rely on observed matrix layouts because the direct raw-to-field mapper for those flattened DTO fields has not yet been recovered.
 - Estimated power-flow breakdown sensors were removed rather than kept as if they were source-backed.
-- No broader app-side label builder was recovered beyond `bCStat`; other user-facing status fields remain raw numeric codes until matching source-backed label logic is found.
+- No broader app-side label builder was recovered beyond `bCStat`; inverter mode is now exposed from the confirmed `workM` enum, while other remaining status fields stay raw numeric codes until matching source-backed label logic is found.
 - Some inverter `Energy[][]` counters are still conservative or provisional until the raw row semantics are proven directly in the decompiled sources.
 - The raw JSON sensor is diagnostic only and disabled by default to avoid unnecessary state growth.

@@ -149,7 +149,7 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["battery_state_of_health"], 100.0)
         self.assertEqual(data["battery_capacity"], 100.0)
         self.assertEqual(data["battery_charge_status"], "Charging")
-        self.assertEqual(data["battery_charge_stage"], "Bulk Charge")
+        self.assertEqual(data["battery_charge_stage"], "Bulk")
         self.assertEqual(data["battery_charge_status_raw"], 1)
         self.assertEqual(data["pv_voltage"], 182.3)
         self.assertEqual(data["pv_current"], 6.4)
@@ -159,6 +159,7 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["pv1_current"], 6.4)
         self.assertEqual(data["pv1_power"], 1176)
         self.assertEqual(data["bus_voltage"], 431.5)
+        self.assertEqual(data["inverter_mode"], "Battery")
         self.assertEqual(data["inverter_mode_raw"], 3)
         self.assertEqual(data["decoder_profile"], "ivem6048_v1")
         self.assertEqual(data["decoder_profile_label"], "IVEM6048_V1")
@@ -190,7 +191,6 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertNotIn("battery_charge_energy_total", data)
         self.assertNotIn("battery_discharge_energy_total", data)
         self.assertNotIn("grid_import_energy_total", data)
-        self.assertNotIn("inverter_mode", data)
         self.assertNotIn("pv_to_load_power", data)
         self.assertNotIn("pv_to_battery_power", data)
         self.assertNotIn("pv_to_grid_power", data)
@@ -274,6 +274,7 @@ class TelemetryNormalizationTests(unittest.TestCase):
 
         data = normalize_telemetry(poll_data)
 
+        self.assertEqual(data["inverter_mode"], "Standby")
         self.assertEqual(data["grid_import_power"], 0)
         self.assertEqual(data["grid_power"], 0)
         self.assertEqual(data["grid_frequency"], 50.0)
@@ -325,6 +326,7 @@ class TelemetryNormalizationTests(unittest.TestCase):
 
         data = normalize_telemetry(poll_data)
 
+        self.assertEqual(data["inverter_mode"], "Grid")
         self.assertEqual(data["battery_power"], -110)
         self.assertEqual(data["battery_discharge_power"], 110)
         self.assertEqual(data["pv_total_power"], 0)
@@ -333,6 +335,44 @@ class TelemetryNormalizationTests(unittest.TestCase):
         self.assertEqual(data["grid_import_power"], 414)
         self.assertEqual(data["grid_export_power"], 0)
         self.assertEqual(data["_power_methods"]["grid_power"], "IVEM workM=5 fallback -> load + max(battery, 0) - pv")
+
+    def test_normalize_telemetry_maps_unknown_inverter_mode_to_raw_string(self) -> None:
+        poll_data = RawPollData(
+            responses={
+                "real": ParsedResponse(
+                    command="real",
+                    raw="real",
+                    objects=[
+                        {
+                            "DevSN": "INV-UNKNOWN-MODE",
+                            "Type": 80,
+                            "SubType": 1035,
+                            "workM": 9,
+                            "Batt": [[52000], [0], [0, 0]],
+                            "Batsoc": [[8000, 0, 0]],
+                        }
+                    ],
+                ),
+                "basic": ParsedResponse(
+                    command="basic",
+                    raw="basic",
+                    objects=[
+                        {
+                            "DevSN": "INV-UNKNOWN-MODE",
+                            "Type": 80,
+                            "SubType": 1035,
+                            "version": "2.20",
+                        }
+                    ],
+                ),
+                "set": ParsedResponse(command="set", raw="set", objects=[]),
+            }
+        )
+
+        data = normalize_telemetry(poll_data)
+
+        self.assertEqual(data["inverter_mode"], "9")
+        self.assertEqual(data["inverter_mode_raw"], 9)
 
     def test_normalize_telemetry_supports_per_string_pv_layout(self) -> None:
         poll_data = RawPollData(
